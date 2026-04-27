@@ -5,37 +5,38 @@
 
 .wrap_target
 readzero:
-jmp zeroout     ; 0 0 0
-jmp oneout      ; 0 0 1
-jmp twoout             ; 0 1 0 
-jmp twoout      ; 0 1 1
-jmp threeout             ; 1 0 0
-jmp threeout             ; 1 0 1
-jmp threeout             ; 1 1 0
-jmp threeout    ; 1 1 1
+    jmp zeroout     ; 0 0 0
+    jmp oneout      ; 0 0 1
+    jmp twoout             ; 0 1 0 
+    jmp twoout      ; 0 1 1
+;    jmp threeout             ; 1 0 0
+;    jmp threeout             ; 1 0 1
+;    jmp threeout             ; 1 1 0
+;    jmp threeout    ; 1 1 1
 
 zeroout:
-set pins 0
-jmp loopback
+    set pins 0
+    jmp loopback
 oneout:
-set pins 1
-jmp loopback
+    set pins 1
+    jmp loopback
 twoout:
-set pins 2
-jmp loopback
+    set pins 2
+    jmp loopback
 threeout:
-set pins 3
-jmp loopback
+;    set pins 3
+;    jmp loopback
 undefined:
-set pins 0
+;    set pins 0
 loopback:
-in null 32
-in pins 3
-mov pc isr
+    in null 32
+    in pins 2 ;3
+    mov pc isr
 .wrap
 
  
 %c-sdk {
+    /*
     static inline void flash_adc_program_init(PIO pio, uint sm, uint offset, uint sampleInPin, uint bitsOutPin) {
         pio_sm_config c = flash_adc_program_get_default_config(offset);
 
@@ -54,4 +55,5 @@ mov pc isr
         pio_sm_init(pio, sm, offset, &c);
         pio_sm_set_enabled(pio, sm, true);
     }
+    */
 %}

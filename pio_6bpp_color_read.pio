@@ -1,24 +1,36 @@
 .program pio_6bpp_color_read
-
-; This reads one horizontal line of pixels only
+.wrap_target
+    ;irq clear 0
+    
+    ; This reads one horizontal line of pixels only
 entry_point:
-wait 0 irq 0
-irq set 0 ; as soon as we get in, re-flag the irq
-; we don't want to retrigger until the next hsync
-set x 31 ; the first 44 pixels are junk
-hblank: ; this looks weird but: 44px * 8 cycles pp = 352
-jmp x-- hblank [11] ; 352 / 32 = 11 cycles per loop
+    mov x y ;[31] ; get "y" pixels also delay about another 2 px for some reason
 
-mov x y [15] ; get 320 pixels also delay about another 2 px for some reason
+    wait 1 irq 0 ;[31]
+    ;irq set 0 ; as soon as we get in, re-flag the irq
+
+    ; we don't want to retrigger until the next hsync
+;    set x 31 ; the first 44 pixels are junk
+hblank: ; this looks weird but: 44px * 8 cycles pp = 352
+;    jmp x-- hblank [11] ; 352 / 32 = 11 cycles per loop
+
 pixelloop1:
-in pins 6 [7] ; 8bit
-in pins 6 [7] ; 14bit
-in pins 6 [7] ; 20bit
-in pins 6 [7] ; 26bit
-in pins 6 [5] ; 32bits
-in null 2     ; 2bits
-jmp x-- pixelloop1
-jmp entry_point
+    ;irq set 1 [9] ;trigger a pixel read
+    in pins 6 [9] ; 8bit
+    ;in null 2     ; 2bits
+    jmp x-- pixelloop1
+    ;jmp entry_point
+.wrap
+
+
+.program pio_6bpp_color_read_pixel
+.wrap_target
+    ;in y 29
+    wait 1 irq 1
+    in pins 3    
+.wrap
+
+
 
 ; genesis master clock is 53.693175MHz
 ; the genesis produces pixels at a  M/8 (6.712MHz) rate in H40 mode
@@ -34,6 +46,7 @@ jmp entry_point
 
 
 %c-sdk {
+    /*
     #include "hardware/clocks.h"
 
     static inline void pio_6bpp_color_read_program_init(PIO pio, uint sm, uint offset, uint startPin) {
@@ -56,4 +69,5 @@ jmp entry_point
         pio_sm_init(pio, sm, offset, &c);
         pio_sm_set_enabled(pio, sm, true);
     }
+    */
 %}
