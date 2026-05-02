@@ -8,7 +8,7 @@
 #include "tmds_encode.h"
 
 
-#include "../ProjectName.h"
+#include "../main.h"
 
 // Time-critical functions pulled into RAM but each in a unique section to
 // allow garbage collection
@@ -412,6 +412,7 @@ void __dvi_func(dvi_scanbuf_main_12bpp_noqueue_sms)(struct dvi_inst *inst, char 
     
     uint32_t scanbuf_pointer = y_base_offset;
 
+    uint16_t pixel;
 	while (1) {
         
         if(y >= header_scanlines && y < footer_lines_start) {
@@ -425,7 +426,13 @@ void __dvi_func(dvi_scanbuf_main_12bpp_noqueue_sms)(struct dvi_inst *inst, char 
             
             for(c = pixels_border; c < pixels_border + output_width; c++)
 			{
-                empty_scanline[c] = curr_framebuffer[scanbuf_pointer];
+                //pixel = curr_framebuffer[scanbuf_pointer] & 0b110000;
+                //empty_scanline[c] = (pixel) | ( pixel >> 2) | (pixel >> 4);
+
+                //pixel = curr_framebuffer[scanbuf_pointer] & 0b11;
+                //empty_scanline[c] = (pixel) | ( pixel << 2) | (pixel << 4);
+
+                empty_scanline[c] = curr_framebuffer[scanbuf_pointer];                
 
                 scanbuf_pointer++;
 			}
