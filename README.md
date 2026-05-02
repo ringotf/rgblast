@@ -1,3 +1,34 @@
+# RGBlast SMS - RGB + Audio To HDMI For Sega Master System
+
+Work in progress! 
+
+## Description
+
+The original RGBlast project was a 2-bit flash analog-to-digital converter RP2040-based video capture for the Sega Mega-Drive/Genesis... which is ideal for capturing the RGB222 video signals from the Sega Master System!
+
+## Features
+
+- RGB222 Video Capture
+- Mono Audio Capture
+- HDMI output using [ikjordan PicoDVI fork](https://github.com/ikjordan/picodvi)
+
+## To-Do
+
+- Update schematics
+- Fix wobbly vertical lines
+- 50/60hz switch?
+- Design PCB
+- ???
+
+## Demo Video
+
+https://youtube.com/shorts/fzoDApS1l0w
+
+----
+----
+
+Original Readme:
+
 # SEGA Genesis RGBlast Processor - RP2040 code & Schematics
 
 A hardware design for capturing RGB direct from a SEGA Genesis and delivering it via USB to a PC.
