@@ -22,7 +22,10 @@ The original RGBlast project was a 2-bit flash analog-to-digital converter RP204
 
 ## Demo Video
 
-https://youtube.com/shorts/fzoDApS1l0w
+
+[<img src="images/video_thumb.jpg" width="400">](https://youtube.com/shorts/fzoDApS1l0w)
+
+
 
 ----
 ----
