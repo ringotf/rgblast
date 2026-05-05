@@ -182,9 +182,9 @@ static void processNextFrame(void);
 //static void pipeImage(void* _unsafe_image_ptr_plz);
 
 PIO vidPIO = pio0;
-uint sm_sync = 1;
-uint sm_pixels = 2;
-uint sm_pixels_read = 3;
+uint sm_sync = 0;
+uint sm_pixels = 1;
+uint sm_pixels_read = 2;
 
 
 uint offset_pixels;
@@ -204,8 +204,8 @@ int dma_chan_write_reset;
 
 bool frameReady;
 
-PIO adcPIO = pio0; //pio1;
-uint sm_flashadc_red = 0;
+//PIO adcPIO = pio0; //pio1;
+//uint sm_flashadc_red = 0;
 
 // sync reading
 // const uint SYNC_OUT_PIN = 22; // this will have to be disabled with FTDI, not enough pins
@@ -442,10 +442,10 @@ bool __not_in_flash_func(dvi_audio_timer_callback_dma)(struct repeating_timer *t
 				sample.channels[0] =  (int16_t)(audio_buffer[audio_read_pos]) - audio_bias_midpoint ;
                 sample.channels[1] =  (int16_t)(audio_buffer[audio_read_pos]) - audio_bias_midpoint ; //sample.channels[0] ;    
 
-                if(audio_read_pos %50 == 0)
+                /*if(audio_read_pos %50 == 0)
                 {
                     printf("audio_read_pos: %d, buffer: %d, sample: %d\n", audio_read_pos, audio_buffer[audio_read_pos], sample.channels[0]);
-                }
+                }*/
 
                 //increment read position
 				audio_read_pos = ((audio_read_pos + 1) % AUDIO_BUFFER_SIZE);
@@ -662,8 +662,10 @@ static inline void vsync_detector_program_init(PIO pio, uint sm, uint offset, ui
     //sm_config_set_clkdiv(&c, 2); // 133/2 = 66.5MHz
     //sm_config_set_clkdiv(&c, 3); 
     //sm_config_set_clkdiv(&c, (DVI_TIMING.bit_clk_khz / sms_clock_pal_khz));
-    sm_config_set_clkdiv(&c, (DVI_TIMING.bit_clk_khz / sms_clock_khz));
+    //sm_config_set_clkdiv(&c, (DVI_TIMING.bit_clk_khz / sms_clock_khz));
     
+    sm_config_set_clkdiv(&c, 1);
+
     //sm_config_set_clkdiv(&c, 1);
     
     // Initialize and enable the state machine.
@@ -680,11 +682,13 @@ static inline void pio_6bpp_color_read_program_init(PIO pio, uint sm, uint offse
     //pio_sm_set_consecutive_pindirs(pio, sm, startPin, 6, false);
     //sm_config_set_in_shift(&c, false, true, 6);
 
-    sm_config_set_clkdiv(&c, 1);
+    //sm_config_set_clkdiv(&c, 1);
     //sm_config_set_clkdiv(&c, (DVI_TIMING.bit_clk_khz / sms_clock_pal_khz));
+
     //float clockdiv = (float)(DVI_TIMING.bit_clk_khz / sms_clock_pal_khz) / 2.f;
-    //sm_config_set_clkdiv(&c, clockdiv);
-    //printf("ClockDiv: %f\n", clockdiv);
+    float clockdiv = (float)(DVI_TIMING.bit_clk_khz / sms_clock_khz) / 2.f;
+    sm_config_set_clkdiv(&c, clockdiv);
+    printf("Pixel ClockDiv: %f\n", clockdiv);
 
     // Initialize and enable the state machine.
     pio_sm_init(pio, sm, offset, &c);
@@ -700,7 +704,11 @@ static inline void pio_6bpp_color_read_pixel_program_init(PIO pio, uint sm, uint
     //sm_config_set_sideset_pins(&c, RED_NOT_ENABLE_PIN);
 
     //sm_config_set_clkdiv(&c, (DVI_TIMING.bit_clk_khz / sms_clock_pal_khz));
-    sm_config_set_clkdiv(&c, 1);
+    sm_config_set_clkdiv(&c, 1.0f);
+    
+    //float clockdiv = (float)(DVI_TIMING.bit_clk_khz / sms_clock_pal_khz) / 2.f;
+    //printf("Read Pixel ClockDiv: %f\n", clockdiv);
+    //sm_config_set_clkdiv(&c, clockdiv);
 
     // Initialize and enable the state machine.
     pio_sm_init(pio, sm, offset, &c);

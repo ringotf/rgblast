@@ -1,16 +1,17 @@
-
+.define csync_gpio 10
 
 .program vsync_detector
 .wrap_target
 waitforvsync:
-    wait 1 gpio 10 ;15 ;might be redundant.
-    wait 0 gpio 10 ;15 ; make sure we catch a falling edge.
-    set x 30
+    wait 1 gpio csync_gpio      ;might be redundant.
+    wait 0 gpio csync_gpio      ; make sure we catch a falling edge.
+    set x 28
 
 vsyncdelaywait:
-    jmp x-- vsyncdelaywait [25]
+    nop [21]
+    jmp x-- vsyncdelaywait [21]
 
-    ; 22 * 29 = 638 cycles @66.5MHz ~ 9.5us
+    ; 22 * 29 = 638 cycles @66.5MHz ~ 9.5us (Not updated for sms)
     ; significantly longer than typical 6us downcycle.
     jmp pin waitforvsync ; if sync went high, this isn't vsync
 
@@ -18,18 +19,18 @@ vsyncdelaywait:
     ;set x 31 ; now after 12 flips we should be in true hsync
 
 waitforhsync:
-    ;wait 1 gpio 10; 15
-    ;wait 0 gpio 10; 15
+    ;wait 1 gpio csync_gpio
+    ;wait 0 gpio csync_gpio
     ;jmp x-- waitforhsync
     
-    wait 1 gpio 10; 15
+    wait 1 gpio csync_gpio
     ;now we're in hsync proper. allow pixel gathering
     ; set pins 1
     mov x y ; get our 224 lines
     
 hblanks:
-    wait 0 gpio 10   ; 15
-    wait 1 gpio 10   ; 15
+    wait 0 gpio csync_gpio   
+    wait 1 gpio csync_gpio   
     ;irq clear 0
     irq set 0           ;start capturing pixels
     jmp x-- hblanks

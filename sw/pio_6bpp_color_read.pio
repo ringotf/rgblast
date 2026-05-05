@@ -4,9 +4,9 @@
     
     ; This reads one horizontal line of pixels only
 entry_point:
-    mov x y ;[31] ; get "y" pixels also delay about another 2 px for some reason
+    mov x y ;[31]   ; get "y" pixels also delay about another 2 px for some reason
 
-    wait 1 irq 0 [13] ;[31]
+    wait 1 irq 0 [5];  [13] ;[31]
     ;irq set 0 ; as soon as we get in, re-flag the irq
 
     ; we don't want to retrigger until the next hsync
@@ -15,8 +15,8 @@ hblank: ; this looks weird but: 44px * 8 cycles pp = 352
 ;    jmp x-- hblank [11] ; 352 / 32 = 11 cycles per loop
 
 pixelloop1:
-    irq set 1 [23]       ;trigger a pixel read
-    nop [23]
+    irq set 1 [18] ; [23]       ;trigger a pixel read, wait for next pixel
+    ;nop [23]
     ;in pins 6 [9] ; 8bit
     ;in null 2     ; 2bits
     jmp x-- pixelloop1

@@ -402,7 +402,8 @@ void __dvi_func(dvi_scanbuf_main_12bpp_noqueue_sms)(struct dvi_inst *inst, char 
 
     uint16_t footer_lines_start = header_scanlines + sms_pixel_height;
 
-    uint16_t y_base_offset =(sms_v_lines_to_skip * pixels_in_scanline) + sms_pixel_x_offset_dvi + (pixels_in_scanline - sms_pixel_width) * 0.5;
+    //uint16_t y_base_offset =(sms_v_lines_to_skip * pixels_in_scanline) + sms_pixel_x_offset_dvi + (pixels_in_scanline - sms_pixel_width) * 0.5;
+    uint16_t y_base_offset = (sms_v_lines_to_skip * pixels_in_scanline) + sms_pixel_x_offset_dvi;
 
     //wait for a vblank to start with, should be good after this, right??
     //while(dma_channel_is_busy(dma_chan_fb1) || dma_channel_is_busy(dma_chan_fb2)) { tight_loop_contents(); };
@@ -472,7 +473,8 @@ void __dvi_func(dvi_scanbuf_main_12bpp_noqueue_sms)(struct dvi_inst *inst, char 
         else
         {
             //scanbuf_pointer = y_base_offset + ((y>>1) * pixels_in_scanline);
-            scanbuf_pointer = y_base_offset + ((y - header_scanlines) * pixels_in_scanline);
+            //scanbuf_pointer = y_base_offset + ((y - header_scanlines) * pixels_in_scanline);
+            scanbuf_pointer = y_base_offset + (y * pixels_in_scanline);
         }
     }
     __builtin_unreachable();
