@@ -5,12 +5,14 @@
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
 #include "pico/time.h"
+#include "pico/flash.h"
 
 #include "hardware/adc.h"
 #include "hardware/pio.h"
 #include "hardware/dma.h"
 #include "hardware/vreg.h"
 #include "hardware/clocks.h"
+#include "hardware/flash.h"
 
 #include "vsync_detector.pio.h"
 #include "pio_6bpp_color_read.pio.h"
@@ -22,37 +24,7 @@
 
 #include "main.h"
 
-/*
-#define ADBUS0_PIN 0
-#define ADBUS1_PIN 1
-#define ADBUS2_PIN 2
-#define ADBUS3_PIN 3
-#define ADBUS4_PIN 4
-#define ADBUS5_PIN 5
-#define ADBUS6_PIN 6
-#define ADBUS7_PIN 7
 
-// ACBUS0 tied low for Chip Select
-#define ACBUS1_PIN 8
-
-// tied read hi
-// #define ACBUS2_PIN 12
-
-#define ACBUS3_PIN 22
-// ACBUS4 tied high for SIWU not used (Sleep Immediate Wake up?)
-
-// tied reset hi
-// #define RESET_PIN 15
-
-#define TXE ACBUS1_PIN
-// #define RD ACBUS2_PIN // could actually just be tied hi for a dumb transmitter.
-#define WR ACBUS3_PIN
-
-#define BUSMASK ((1 << ADBUS0_PIN) | (1 << ADBUS1_PIN) | (1 << ADBUS2_PIN) | (1 << ADBUS3_PIN) | (1 << ADBUS4_PIN) | (1 << ADBUS5_PIN) | (1 << ADBUS6_PIN) | (1 << ADBUS7_PIN))
-
-*/
-
-//#define IMAGE_SIZE_PIXELS (sms_pixel_width*sms_pixel_height)
 #define IMAGE_SIZE_PIXELS (pixels_in_scanline*scanlines_in_active_area)
 #define PIXELS_PER_WORD 1 //5 // 5px*6bpp+2bits
 #define IMAGE_SIZE_WORDS (IMAGE_SIZE_PIXELS/PIXELS_PER_WORD)
@@ -82,66 +54,12 @@ __attribute__((aligned(0x8)))
 __attribute__((aligned(0x200)))
 unsigned char SIX_BIT_LUT[512];
 
-/*
-__attribute__((aligned(0x200)))
-unsigned char SIX_BIT_LUT_ALT[512];
-
-// Extract 3-bit thermometer codes from the 9-bit input
-static inline unsigned char therm_to_2bit(unsigned char t3)
-{
-    t3 &= 0x07;                    // safety mask
-
-    // Simple bubble-tolerant decoder for 3-bit thermometer
-    if (t3 == 0b000) return 0;
-    if (t3 == 0b001) return 1;
-    if (t3 == 0b011) return 2;
-    if (t3 == 0b111) return 3;
-
-    // Bubble error handling - find the highest reliable transition
-    if (t3 & 0b100) return 3;      // any 1 in MSB → likely 3
-    if (t3 & 0b010) return 2;      // any 1 in middle → likely 2
-    if (t3 & 0b001) return 1;
-
-    return 0;
-}
-
-// Main conversion function: 9-bit → 6-bit RGB
-static inline unsigned char rgb_therm9_to_6bit(unsigned int code)
-{
-    code &= 0x1FFu;                     // keep only 9 bits
-
-    unsigned char r_therm = (code >> 6) & 0x07;
-    unsigned char g_therm = (code >> 3) & 0x07;
-    unsigned char b_therm = (code >> 0) & 0x07;
-
-    unsigned char r = therm_to_2bit(r_therm);
-    unsigned char g = therm_to_2bit(g_therm);
-    unsigned char b = therm_to_2bit(b_therm);
-
-    return (r << 4) | (g << 2) | b;     // pack as 6-bit: RRGGBB
-}
-
-
-void generate_lut_alt()
-{
-
-    for (int i = 0; i < 512; i++)
-    {
-        SIX_BIT_LUT_ALT[i] = rgb_therm9_to_6bit(i);
-    }
-
-}
-*/
 
 void generate_lut()
 {
-
-    //generate_lut_alt();
-
-    printf("Generating Lut...\n");
+    printf("%s: Generating Lut...\n", __func__);
 
     for(uint16_t r = 0; r < 8; r++)
-    //for(uint16_t r = 0; r < 4; r++)
     { 
         for(uint16_t g = 0; g < 8; g++)
         {
@@ -149,7 +67,6 @@ void generate_lut()
             {
 
                 uint16_t r_value = TWO_BIT_LUT[r];
-                //uint16_t r_value = ONE_BIT_LUT[r];
                 uint16_t g_value = TWO_BIT_LUT[g];
                 uint16_t b_value = TWO_BIT_LUT[b];
 
@@ -158,28 +75,15 @@ void generate_lut()
                 uint16_t lut_index = (r * 64) + (g * 8) + b;
                 SIX_BIT_LUT[lut_index] = lut_value;
 
-                /*if(SIX_BIT_LUT_ALT[lut_index] != SIX_BIT_LUT[lut_index])
-                {
-                    printf("*** LUT Mismatch! ***\n");
-                }
-
-                printf("R: %d G: %d B: %d Index: %04X %012b, Value: %04X %06b, Alt Value: %04X\n", r, g, b, lut_index, lut_index, lut_value, lut_value, SIX_BIT_LUT_ALT[lut_index]);
-                */
                 
-                printf("R: %d G: %d B: %d Index: %04X %012b, Value: %04X %06b\n", r, g, b, lut_index, lut_index, lut_value, lut_value);
+                //printf("R: %d G: %d B: %d Index: %04X %012b, Value: %04X %06b\n", r, g, b, lut_index, lut_index, lut_value, lut_value);
 
             }
         }
     }
 
-
- 
 }
 
-//------------- prototypes -------------//
-static void processNextFrame(void);
-//static inline void write_byte(uint8_t b);
-//static void pipeImage(void* _unsafe_image_ptr_plz);
 
 PIO vidPIO = pio0;
 uint sm_sync = 0;
@@ -187,8 +91,10 @@ uint sm_pixels = 1;
 uint sm_pixels_read = 2;
 
 
+uint offset_sync;
 uint offset_pixels;
 uint offset_pixels_read;
+
 //uint32_t IMAGE_DATA[IMAGE_SIZE_WORDS+1];
 unsigned char IMAGE_DATA[IMAGE_SIZE_WORDS];
 unsigned char * IMAGE_DATA_ADDRESS = IMAGE_DATA;
@@ -229,6 +135,16 @@ const uint RED_NOT_ENABLE_PIN = 20;
 const uint GREEN_NOT_ENABLE_PIN = 21;
 const uint BLUE_NOT_ENABLE_PIN = 22;
 */
+
+const uint NTSC_PAL_PIN = 11;
+const uint PAUSE_PIN = 20;
+
+
+const uint USER_BTN_PIN = 24;
+
+#define VDP_NTSC_MODE 1
+#define VDP_PAL_MODE 0
+
 
 //libdvi output
 #define dvi_d2_pins_base 16
@@ -421,8 +337,8 @@ bool __not_in_flash_func(dvi_audio_timer_callback_dma)(struct repeating_timer *t
 
 		audio_write_pos = samples_written - (samples_written % 2);
 		
-		//printf("Trans Count: %u | Buffer Size: %u | samples requested: %u | Samples Available: %d | write_pos: %u | read_pos: %u \n",
-        //   current_trans_count, AUDIO_BUFFER_SIZE, size, audio_write_pos-audio_read_pos, audio_write_pos, audio_read_pos);
+		printf("Trans Count: %u | Buffer Size: %u | samples requested: %u | Samples Available: %d | write_pos: %u | read_pos: %u \n",
+           current_trans_count, AUDIO_BUFFER_SIZE, size, audio_write_pos-audio_read_pos, audio_write_pos, audio_read_pos);
 		//printf("Trans Count: %u | Buffer Size: %u | samples requested: %u | Samples written: %u | write_pos: %u | read_pos: %u | FIFO level: %d\n",
         //   current_trans_count, AUDIO_BUFFER_SIZE, size, samples_written, audio_write_pos, audio_read_pos, adc_fifo_get_level());
 		//printf("DMA addr: 0x%08X | Samples written: %u | write_pos: %u | read_pos: %u | FIFO level: %d | Request Size: %d | Buffer Size: %d\n",
@@ -472,7 +388,7 @@ bool __not_in_flash_func(dvi_audio_timer_callback_dma)(struct repeating_timer *t
     return true;
 }
 
-
+/*
 bool __not_in_flash_func(adc_callback_test)(struct repeating_timer *t)
 {
     adc_select_input(sms_audio_pin);
@@ -481,11 +397,12 @@ bool __not_in_flash_func(adc_callback_test)(struct repeating_timer *t)
     
     return true;
 }
+*/
 
 void config_audio()
 {
 
-    printf("Configuring Audio, buffer size: %d\n", AUDIO_BUFFER_SIZE);
+    printf("%s: Configuring Audio, buffer size: %d\n", __func__, AUDIO_BUFFER_SIZE);
 
 	for(uint32_t i = 0; i < AUDIO_BUFFER_SIZE; i++)
 	{
@@ -495,18 +412,15 @@ void config_audio()
 
 	adc_init();
 	adc_gpio_init(sms_audio_pin); //enable adc and disabled gpio on these pins
-    adc_gpio_init(27);
-    adc_gpio_init(28);
-    adc_gpio_init(29);
+    //adc_gpio_init(27);
+    //adc_gpio_init(28);
+    //adc_gpio_init(29);
 	
 	adc_set_temp_sensor_enabled(false);
-
 
     //adc_select_input(sms_audio_pin);
 
 	//add_repeating_timer_ms(1, adc_callback_test, NULL, &dvi_audio_timer);
-
-    
 
 	adc_set_round_robin(0b1); //sample adc pins 1 and 2 i.e. 26/27 and 28 for brightness potentiometer, 29 is ignored but needs to be read to fit everything in a power of 2 buffer
 
@@ -522,8 +436,8 @@ void config_audio()
 	adc_dma_chan_sample = dma_claim_unused_channel(true);	
 	adc_dma_chan_control = dma_claim_unused_channel(true);
     
-    printf("adc_dma_chan_sample: %d\n", adc_dma_chan_sample);
-    printf("adc_dma_chan_control: %d\n", adc_dma_chan_control);
+    printf("%s: adc_dma_chan_sample: %d\n", __func__, adc_dma_chan_sample);
+    printf("%s: adc_dma_chan_control: %d\n", __func__, adc_dma_chan_control);
 
 	dma_channel_config adc_dma_config_sample = dma_channel_get_default_config(adc_dma_chan_sample);
 	channel_config_set_transfer_data_size(&adc_dma_config_sample, DMA_SIZE_16);
@@ -568,11 +482,15 @@ void config_audio()
 
 }
 
+
 //
 //secondary dvi output loop
 //
 void core1_main() 
 {
+    //allow the other core to take over if the flash becomes active
+    //flash_safe_execute_core_init(); //this breaks audio right now - this core doesnt need to do anything in flash though... right??
+
 	
 	//
 	//DVI INIT
@@ -614,13 +532,13 @@ void core1_main()
 		}
 		else*/
 		{
-			printf("starting DVI in SMS mode\n");
+			printf("%s: starting DVI in SMS mode\n", __func__);
 			dvi0.vertical_repeat = DVI_VERTICAL_REPEAT_SMS;
 			dvi_register_irqs_this_core(&dvi0, DVI_DMA_IRQ);
 			dvi_start(&dvi0);
 			//dvi_scanbuf_main_12bpp_noqueue_sms(&dvi0, framebuffer, framebuffer2, dma_chan_fb1_write, dma_chan_fb2_write);
             dvi_scanbuf_main_12bpp_noqueue_sms(&dvi0, IMAGE_DATA);
-			printf("stopping DVI in SMS mode\n");
+			printf("%s: stopping DVI in SMS mode\n", __func__);
 		}
 		dvi_stop(&dvi0);
 	}
@@ -688,7 +606,7 @@ static inline void pio_6bpp_color_read_program_init(PIO pio, uint sm, uint offse
     //float clockdiv = (float)(DVI_TIMING.bit_clk_khz / sms_clock_pal_khz) / 2.f;
     float clockdiv = (float)(DVI_TIMING.bit_clk_khz / sms_clock_khz) / 2.f;
     sm_config_set_clkdiv(&c, clockdiv);
-    printf("Pixel ClockDiv: %f\n", clockdiv);
+    printf("%s: Pixel ClockDiv: %f\n", __func__, clockdiv);
 
     // Initialize and enable the state machine.
     pio_sm_init(pio, sm, offset, &c);
@@ -715,22 +633,28 @@ static inline void pio_6bpp_color_read_pixel_program_init(PIO pio, uint sm, uint
 }
 
 
+void claim_pio_sm()
+{
+	pio_sm_claim(vidPIO, sm_sync);
+    pio_sm_claim(vidPIO, sm_pixels);
+    pio_sm_claim(vidPIO, sm_pixels_read);
+}
 
 void config_pio()
 {
 
-    uint offset_sync = pio_add_program(vidPIO, &vsync_detector_program);
+    offset_sync = pio_add_program(vidPIO, &vsync_detector_program);
     //uint sm_sync = pio_claim_unused_sm(vidPIO, true);
-    pio_sm_claim(vidPIO, sm_sync);
+    
 
     gpio_set_input_enabled(SYNC_IN_PIN, true);
 
     // PIO pixelReadPIO = pio1;
     offset_pixels = pio_add_program(vidPIO, &pio_6bpp_color_read_program);
-    pio_sm_claim(vidPIO, sm_pixels);
+    
 
     offset_pixels_read = pio_add_program(vidPIO, &pio_6bpp_color_read_pixel_program);
-    pio_sm_claim(vidPIO, sm_pixels_read);
+    
 
     /*for (uint i=0; i<6; i++) {
         gpio_set_input_enabled(RGB_IN_START_PIN+i, true);
@@ -803,30 +727,31 @@ void config_pio()
 
 volatile uint32_t * write_chan_write_address_pointer;
 
-
-void config_dma()
+void claim_dma()
 {
-
 	for(uint32_t c = 0; c < 12; c++) {
 		dma_channel_cleanup(c);
     	dma_channel_unclaim(c);
 	}
 
-
-    // Get a free dma channel, panic() if there are none
-    //dma_chan_capture = dma_claim_unused_channel(true);
-    //dma_chan_reset = dma_claim_unused_channel(true);
-    
+	//DVI code uses claim_unused_channel, so we must as well, instead of explicitly picking DMA channels
+	//DVI audio also claims 2 dma channels
     dma_chan_lookup_capture = dma_claim_unused_channel(true);
     dma_chan_write_capture = dma_claim_unused_channel(true);
     dma_chan_lookup_reset = dma_claim_unused_channel(true);
     dma_chan_write_reset = dma_claim_unused_channel(true);
-
     
-    printf("dma_chan_lookup_capture: %d\n", dma_chan_lookup_capture);
-    printf("dma_chan_write_capture: %d\n", dma_chan_write_capture);
-    printf("dma_chan_lookup_reset: %d\n", dma_chan_lookup_reset);    
-    printf("dma_chan_write_reset: %d\n", dma_chan_write_reset);
+    printf("%s: dma_chan_lookup_capture: %d\n", __func__, dma_chan_lookup_capture);
+    printf("%s: dma_chan_write_capture: %d\n", __func__, dma_chan_write_capture);
+    printf("%s: dma_chan_lookup_reset: %d\n", __func__, dma_chan_lookup_reset);    
+    printf("%s: dma_chan_write_reset: %d\n", __func__, dma_chan_write_reset);
+}
+
+void config_dma()
+{
+    // Get a free dma channel, panic() if there are none
+    //dma_chan_capture = dma_claim_unused_channel(true);
+    //dma_chan_reset = dma_claim_unused_channel(true);
     
     
     write_chan_write_address_pointer = &(dma_hw->ch[dma_chan_write_capture].al3_read_addr_trig);
@@ -935,6 +860,245 @@ void config_dma()
 }
 
 
+/*
+// FLASH stuff lifted from pico examples
+// This function will be called when it's safe to call flash_range_erase
+static void call_flash_range_erase(void *param) {
+    uint32_t offset = (uint32_t)param;
+    
+    //printf("erasing %08X\n", offset);
+    flash_range_erase(offset, FLASH_SECTOR_SIZE);
+}
+
+// This function will be called when it's safe to call flash_range_program
+static void call_flash_range_program(void *param) {
+    uint32_t offset = ((uintptr_t*)param)[0];
+    const uint8_t *data = (const uint8_t *)((uintptr_t*)param)[1];
+    
+    //printf("programming %08X\n", offset);
+    flash_range_program(offset, data, FLASH_PAGE_SIZE);
+}
+
+void read_flash()
+{
+    memcpy(config, nvdata, FLASH_PAGE_SIZE);
+    //printf("read flash\n");
+}
+
+void write_flash()
+{
+    //printf("writing flash\n");
+
+    uint32_t ints = save_and_disable_interrupts();
+
+    int rc; 
+    rc = flash_safe_execute(call_flash_range_erase, (void*)FLASH_TARGET_OFFSET, UINT32_MAX);
+    hard_assert(rc == PICO_OK);
+    
+    //printf("erased flash\n");
+
+    uintptr_t params[] = { FLASH_TARGET_OFFSET, (uintptr_t)config};
+    rc = flash_safe_execute(call_flash_range_program, params, UINT32_MAX);
+    hard_assert(rc == PICO_OK);
+
+    //printf("programmed flash\n");
+    
+    restore_interrupts(ints);
+}
+*/
+
+struct erase_params {
+    uint32_t offset;
+    uint32_t len;
+};
+
+struct program_params {
+    uint32_t offset;
+    //const uint8_t *data;
+    void *data;
+    uint32_t len;
+};
+
+static void safe_erase_callback(void * param)
+{
+    struct erase_params *e = (struct erase_params*) param;
+    //printf("Safetly erasing %u bytes from 0x%08X\n", e->len, e->offset);
+    flash_range_erase(e->offset, e->len);
+}
+
+static void safe_program_callback(void * param)
+{
+    struct program_params *p = (struct program_params *) param;
+
+    //printf("Safetly copying %u bytes from 0x%08X\n", p->len, p->offset);
+    flash_range_program(p->offset, p->data, p->len);
+}
+
+
+Config current_config;
+
+bool save_config()
+{
+    //CartConfig cfg = {0};
+    Config* cfg = &current_config;
+
+    printf("%s: Saving Config\n", __func__);
+    
+    uint32_t ints = save_and_disable_interrupts();
+    
+    uint32_t erase_bytes = (sizeof(Config) + 4095) & ~4095UL;
+
+    printf("%s: Erasing %d config bytes at %08X\n", __func__, erase_bytes, FLASH_CONFIG_OFFSET);
+    struct erase_params e = {FLASH_CONFIG_OFFSET, erase_bytes};
+    int rc = flash_safe_execute(safe_erase_callback, &e, 1000); //1000ms timeout
+
+    if(rc != PICO_OK){
+        //printf("%s: safe_erase_callback failed: %d\n", __func__, rc);
+        printf("failed: %d\n", rc);
+        restore_interrupts(ints);
+        return false;
+    }
+    
+    printf("%s: Erased ok\n", __func__);
+    
+    struct program_params p = {FLASH_CONFIG_OFFSET, cfg, sizeof(Config)};
+
+    rc = flash_safe_execute(safe_program_callback, &p, 2000); //1000ms timeout
+    
+    if(rc != PICO_OK){
+        printf("%s: safe_program_callback failed: %d offset: %08X\n", __func__, rc, FLASH_CONFIG_OFFSET);
+        restore_interrupts(ints);
+        return false;
+    }
+
+    if(rc == PICO_OK)
+    {
+        printf("%s: Config Saved:\n ntsc_pal_toggle: %s\n", __func__, cfg->ntsc_pal_toggle);
+    }
+    else 
+    {  
+        printf("%s: Failed to save config: %d\n", __func__, rc);
+    }
+
+    restore_interrupts(ints);
+    
+}
+
+
+void load_config()
+{
+    //printf("%s: Loading Config...\n", __func__);
+    memcpy(&current_config, (const void*)(XIP_BASE + FLASH_CONFIG_OFFSET), sizeof(Config));
+
+    if(current_config.identifier != CONFIG_IDENTIFIER
+        || current_config.version != CONFIG_VERSION)
+    {
+        printf("%s: Old or invalid config detected - resetting\n", __func__);
+        memset(&current_config, 0, sizeof(Config));
+
+        current_config.identifier = (uint32_t)CONFIG_IDENTIFIER;
+        current_config.version = (uint32_t)CONFIG_VERSION;
+        
+        current_config.ntsc_pal_toggle = 0;
+
+        sleep_ms(10);
+
+        save_config();
+    }
+    else
+    {        
+        printf("%s: Loaded Config: Id: %08X Version: %d\n ntsc_pal_toggle: %d\n",__func__, current_config.identifier, current_config.version, current_config.ntsc_pal_toggle);
+    }
+
+}
+
+ 
+void dma_start()
+{
+    dma_channel_start(dma_chan_lookup_capture);
+}
+
+void dma_stop()
+{
+    dma_channel_abort(dma_chan_lookup_capture);
+    dma_channel_abort(dma_chan_write_capture);
+    dma_channel_abort(dma_chan_lookup_reset);
+    dma_channel_abort(dma_chan_write_reset);
+
+}
+
+void pio_start()
+{
+    pio_sm_set_enabled(vidPIO, sm_pixels_read, true);
+    pio_sm_set_enabled(vidPIO, sm_pixels, true);
+    pio_sm_set_enabled(vidPIO, sm_sync, true);
+}
+
+void pio_stop()
+{
+
+	//stop and reset pios
+	pio_set_sm_mask_enabled(vidPIO, 0b1111, false);
+
+	pio_clear_instruction_memory(vidPIO); 
+    
+	pio_interrupt_clear(vidPIO, 0);
+	pio_interrupt_clear(vidPIO, 1);
+	pio_interrupt_clear(vidPIO, 2);
+	pio_interrupt_clear(vidPIO, 3);
+	pio_interrupt_clear(vidPIO, 4);
+	pio_interrupt_clear(vidPIO, 5);
+	pio_interrupt_clear(vidPIO, 6);	
+	pio_interrupt_clear(vidPIO, 7);
+
+    
+	pio_sm_clear_fifos(vidPIO, sm_pixels_read);
+	pio_sm_clear_fifos(vidPIO, sm_pixels);
+	pio_sm_clear_fifos(vidPIO, sm_sync);
+
+	pio_remove_program(vidPIO, &pio_6bpp_color_read_pixel_program, offset_pixels_read);
+	pio_remove_program(vidPIO, &pio_6bpp_color_read_program, offset_pixels);
+	pio_remove_program(vidPIO, &vsync_detector_program, offset_sync);
+
+}
+
+
+bool current_ntsc = false;
+
+void toggle_ntsc_pal_mode()
+{
+    current_ntsc = !current_ntsc;
+
+    //config[0] = current_ntsc;
+    current_config.ntsc_pal_toggle = current_ntsc;
+    printf("%s: Switched NTSC/PAL! %d \n",__func__, current_ntsc);
+
+    if(current_ntsc)
+    {
+        gpio_put(NTSC_PAL_PIN, VDP_NTSC_MODE);
+    }
+    else
+    {
+        gpio_put(NTSC_PAL_PIN, VDP_PAL_MODE);
+    }
+
+    save_config();
+
+/*  
+    pio_stop();
+    dma_stop();
+
+    config_pio();
+    config_dma();
+
+    dma_start();
+    pio_start();
+*/
+} 
+
+ const uint LED_PIN = PICO_DEFAULT_LED_PIN;
+
+
 
 int main()
 {
@@ -942,154 +1106,225 @@ int main()
 	vreg_set_voltage(VREG_VSEL);
 	sleep_ms(10);
 	set_sys_clock_khz(DVI_TIMING.bit_clk_khz, true);
-	stdio_init_all();
+
+
+	//stdio_init_all();
+    //stdio_usb_init();
     
 	sleep_ms(1000);
+	printf("------------\n");
 	printf("PICO SMS RGB\n");
-	sleep_ms(100);
+	printf("------------\n");
+	sleep_ms(10);
 
-    const uint LED_PIN = PICO_DEFAULT_LED_PIN;
+    load_config();
+
+	sleep_ms(10);
+
+
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN, GPIO_OUT);
 
 
+    gpio_init(NTSC_PAL_PIN);
+    gpio_set_dir(NTSC_PAL_PIN, GPIO_OUT);
+
+    current_ntsc = current_config.ntsc_pal_toggle;
+    
+    printf("%s: current_ntsc = %d \n", __func__, current_ntsc);
+   // gpio_put(LED_PIN, current_ntsc);
+
+    if(current_ntsc)
+    {
+        gpio_put(NTSC_PAL_PIN, VDP_NTSC_MODE);
+    }
+    else
+    {
+        gpio_put(NTSC_PAL_PIN, VDP_PAL_MODE);
+    }
+
+
+    gpio_init(PAUSE_PIN);
+    gpio_set_dir(PAUSE_PIN, GPIO_IN);
+    //gpio_set_pulls(PAUSE_PIN, false, false);
+
+    gpio_init(USER_BTN_PIN);
+    gpio_set_dir(USER_BTN_PIN, GPIO_IN);
+    gpio_set_pulls(USER_BTN_PIN, true, false);
+
+	sleep_ms(10);
+
     generate_lut();
-
-    // Init FTDI Pins.
-    //gpio_init_mask(BUSMASK);
-    //gpio_set_dir_out_masked(BUSMASK);
-
-    //gpio_init(TXE);
-    //gpio_set_dir(TXE, false);
-    //gpio_init(WR);
-    //gpio_set_dir(WR, true);
-
-    //gpio_put(WR, true);
 
     fill_framebuffer_with_test_pattern();
 
-    
-    // Init image capture PIO stuff
-    // gpio_set_pulls(BLUE_ADC_IN_PIN, false, true);
-    // gpio_set_pulls(BLUE_ADC_IN_PIN+1, false, true);
-    // gpio_set_pulls(BLUE_ADC_IN_PIN+2, false, true);
-    // gpio_set_pulls(GREEN_ADC_IN_PIN, false, true);
-    // gpio_set_pulls(GREEN_ADC_IN_PIN+1, false, true);
-    // gpio_set_pulls(GREEN_ADC_IN_PIN+2, false, true);
-    // gpio_set_pulls(RED_ADC_IN_PIN, false, true);
-    // gpio_set_pulls(RED_ADC_IN_PIN+1, false, true);
-    // gpio_set_pulls(RED_ADC_IN_PIN+2, false, true);
+	sleep_ms(10);
 
 
-
-    // image termination sequence
-    // 0b00000011 00000011 00000011 00000011
-    // would be
-    // 000000 110000 001100 000011 000000 11
-    // black  red    green  blue   black
-    // unlikely sequence of colors to happen by chance
-    //IMAGE_DATA[IMAGE_SIZE_WORDS] = 0b00000011000000110000001100000011;
-
-
+    claim_pio_sm();
     config_pio();
 
+    claim_dma();
     config_dma();
 
+	sleep_ms(10);
 
-
-    dma_channel_start(dma_chan_lookup_capture);
-
-    frameReady = false;
-
-
-    pio_sm_set_enabled(vidPIO, sm_pixels_read, true);
-    pio_sm_set_enabled(vidPIO, sm_pixels, true);
-    pio_sm_set_enabled(vidPIO, sm_sync, true);
-
+    dma_start();
+    pio_start();
 
     //pio_sm_set_enabled(adcPIO, sm_flashadc_red, true);
 
     //core1_main();
 
+	sleep_ms(10);
     
 	multicore_reset_core1();
 
 	multicore_launch_core1(core1_main); //libdvi core
 
+    frameReady = false;
+
+    bool pause_pressed = false;
+    bool pause_down = false;
+    bool pause_up = false;
+    bool pause_was_pressed = false;
+
+    uint8_t pause_count = 0;
+    uint32_t pause_timeout = 0;
+    uint32_t time_now = 0;
+
+    frameReady = true;
+    gpio_put(LED_PIN, frameReady);
+    uint32_t led_timer = 0;
 
     while (1) {
         //gpio_put(LED_PIN, true);
         //processNextFrame();
-        gpio_put(LED_PIN, frameReady);
         //busy_wait_at_least_cycles(133);
         //busy_wait_at_least_cycles(300);
         //printf("test\n");
-	    sleep_ms(100);
-        frameReady = true;
-        gpio_put(LED_PIN, frameReady);
-        frameReady = false;
-	    sleep_ms(500);
+
+
+        time_now = time_us_32();
+
+	    //sleep_ms(200);
+        if(time_now > led_timer)
+        {
+            frameReady = !frameReady;
+            gpio_put(LED_PIN, frameReady);
+            led_timer = time_now + (200 * 1000); //200ms
+        }
+        //sleep_ms(2);
+
         
+        pause_pressed = !gpio_get(PAUSE_PIN);
+        //pause_pressed = !gpio_get(PAUSE_PIN) || !gpio_get(USER_BTN_PIN);
+        //pause_pressed = !gpio_get(USER_BTN_PIN);
+
+        if(pause_pressed)
+        {
+            
+            pause_down = !pause_was_pressed;
+            pause_was_pressed = true;
+
+            pause_up = false;
+
+            //printf("Pause Pressed?\n");
+
+            /*if(pause_down)
+            {
+                //frameReady = !frameReady;
+                //gpio_put(LED_PIN, frameReady);
+
+                if(pause_timeout > 0 && pause_timeout < time_now) 
+                {
+                    pause_count = 0;
+                    pause_timeout = 0;
+                }
+            
+                //pause_timeout = 0;
+                
+                //printf("Pause Timeout!\n");
+                
+                if(pause_timeout == 0 || pause_timeout > time_now)
+                {
+                    pause_count++;
+
+                    //printf("%s: Pause Down! %d \n",__func__, pause_count);
+                    
+                    if(pause_count == 1)
+                    {
+                        pause_timeout = time_now + (2 * 1000 * 1000);
+                    } 
+                    
+                    if(pause_count == 2)
+                    {
+                        pause_count = 0;
+                        pause_timeout = 0;
+
+                        toggle_ntsc_pal_mode();
+                        //gpio_put(LED_PIN, current_ntsc);
+                    }
+                }
+            }*/
+
+        }
+        else
+        {
+            pause_up = pause_was_pressed;
+            pause_was_pressed = false;
+            
+            pause_down = false;
+
+            //printf("Pause Not Pressed?\n");
+
+            if(pause_up)
+            {
+
+                if(pause_timeout > 0 && pause_timeout < time_now) 
+                {
+                    pause_count = 0;
+                    pause_timeout = 0;
+                }
+                if(pause_timeout == 0 || pause_timeout > time_now)
+                {
+                    pause_count++;
+
+                    //printf("%s: Pause Up! %d \n",__func__, pause_count);
+                    
+                    if(pause_count == 1)
+                    {
+                        pause_timeout = time_now + (2 * 1000 * 1000);
+                    } 
+                    
+                    if(pause_count == 4)
+                    {
+                        pause_count = 0;
+                        pause_timeout = 0;
+
+                        toggle_ntsc_pal_mode();
+                        //gpio_put(LED_PIN, current_ntsc);
+                    }
+                }
+            }
+
+
+
+        }
+
+        /*else if(pause_timeout > 0 && pause_timeout < time_now)
+        {
+            pause_timeout = 0;
+            pause_count = 0;
+            
+            //printf("Pause Timeout!\n");
+        }*/
+
+        
+
+        sleep_ms(1);
+    
     }
 
     return 0;
 }
-
-/*
-static void processNextFrame(void) {
-    if (!frameReady) {
-        // tud_cdc_write_clear();
-        pio_sm_clear_fifos(vidPIO,sm_pixels);
-        
-        // point the DMA dest to IMAGE_DATA, set xfer size, start the DMA.
-        dma_channel_set_write_addr(dma_chan_capture, &IMAGE_DATA[0], true);
-        dma_channel_start(dma_chan_capture);
-
-        // then
-        // clear vsync flag IRQ4 to indicate  we're ready for a frame
-        //vidPIO->irq = 0b00010000;
-        //pio_interrupt_clear(vidPIO, 4);
-
-        dma_channel_wait_for_finish_blocking(dma_chan_capture);
-
-        frameReady = true;
-        return;
-    }
-
-    //pipeImage(IMAGE_DATA);
-}
-*/
-/*
-static void pipeImage(void* _unsafe_image_ptr_plz) {
-    // omg the FTDI version is so much simpler lol
-    uint8_t *bytePtr = (uint8_t*)_unsafe_image_ptr_plz;
-    for (uint i=0; i<IMAGE_SIZE_BYTES; i++) {
-        write_byte(bytePtr[i]);
-    }
-
-    for (uint i=0; i<4; i++) {
-        write_byte(0b00000011);
-    }
-
-    frameReady = false;
-}
-
-
-static inline void write_byte(uint8_t b) {
-    // based on 133MHz clock or
-    // 133 MHz = 7.518ns per cycle
-    // let's try actually using TXE as a read
-    gpio_put(WR, true);
-    while (gpio_get(TXE)) { // TXE hi means you gotta wait.
-        busy_wait_at_least_cycles(1);
-    }
-    busy_wait_at_least_cycles(5);
-    gpio_put_masked(BUSMASK, b);
-    busy_wait_at_least_cycles(1);  // DATA to WR# active setup time: 5ns
-    gpio_put(WR, false); // WR active is LOW.
-    busy_wait_at_least_cycles(5); // WR# active pulse width: 30ns
-    gpio_put(WR, true);
-    // busy_wait_at_least_cycles(7); // TXE# inactive after WR# cycle: 49 ns
-    // actually this last wait cycle is probably irrelevant, since we're waiting for TXE to go low
-}
-*/

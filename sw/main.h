@@ -40,5 +40,26 @@
 #define DVI_VERTICAL_REPEAT_SMS 2
 #endif
 
+
+
+//#define LED_PIN  25 //PICO_DEFAULT_LED_PIN
+
+
 //adc audio capture
 #define sms_audio_pin 26
+
+
+
+typedef struct {
+    uint32_t identifier;
+    uint32_t version;
+    uint32_t ntsc_pal_toggle;
+} Config;
+
+//extern const uint8_t __flash_config_start[];
+
+#define FLASH_CONFIG_OFFSET (1024 * 1024)
+
+//#define FLASH_CONFIG_OFFSET ((uint32_t)__flash_config_start - XIP_BASE)
+#define CONFIG_IDENTIFIER 0x52474253 //ASCII "RGBS"
+#define CONFIG_VERSION 0x01

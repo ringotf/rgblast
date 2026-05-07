@@ -51,10 +51,12 @@ set(COMMON_LIBRARIES
         hardware_adc
         hardware_dma
         hardware_pio
+        hardware_flash
         pico_time 
         pico_multicore 
         libdvi
         pico_stdlib
+        pico_stdio_usb
 )
 
 add_executable(${project_name_ntsc} ${COMMON_SOURCES})
@@ -123,6 +125,10 @@ pico_enable_stdio_uart(${project_name_ntsc} 0)
 pico_enable_stdio_uart(${project_name_pal} 0)
 pico_enable_stdio_uart(${project_name_pal60} 0)
 
+
+target_compile_definitions(${project_name_ntsc} PRIVATE PICO_FLASH_ASSUME_CORE1_SAFE=1)
+target_compile_definitions(${project_name_pal} PRIVATE PICO_FLASH_ASSUME_CORE1_SAFE=1)
+target_compile_definitions(${project_name_pal60} PRIVATE PICO_FLASH_ASSUME_CORE1_SAFE=1)
 
 target_compile_definitions(${project_name_ntsc} PRIVATE VIDEO_MODE_NTSC=1)
 target_compile_definitions(${project_name_pal} PRIVATE VIDEO_MODE_PAL=1)
