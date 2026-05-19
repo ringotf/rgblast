@@ -25,10 +25,42 @@ pixelloop1:
 
 
 .program pio_6bpp_color_read_pixel
+;.side_set 2 opt
 .wrap_target
-    in y 23 
-    wait 1 irq 1  
-    in pins 9 ; 8bit
+    in y 23  side 0b00 ; 0b00 channel 1
+    wait 1 irq 1 
+    in pins 9  ; 8bit
+
+    ;Red
+    ;in pins 3 [3] side 0b01 ; 0b01 channel 2 
+
+    ;settle
+    ;nop [3] 
+    ;nop [0]
+
+    ;Green
+    ;in pins 3 [3] side 0b11 ; 0b11 channel 3
+
+    ;settle
+    ;nop [3]
+
+    ;Blue
+    ;in pins 3  side 0b00 ; 0b00 channel 1
+
+
+    ;in pins 3 [3] side 0b01
+    ;nop [3]
+    ;in pins 3 [3] side 0b11
+    ;nop [3]
+    ;in pins 3  side 0b00
+
+
+
+;    in pins 3 side 0b01 [3]  ; 8bit
+;    nop [3]
+;    in pins 3 side 0b11 [3] ; 8bit
+;    nop [3]
+;    in pins 3 side 0b00 ; 8bit
 
 .wrap
 

@@ -1,0 +1,4 @@
+(fp_lib_table
+	(version 7)
+	(lib (name "rgblast-sms-footprints") (type "KiCad") (uri "${KIPRJMOD}/rgblast-sms-footprints.pretty") (options "") (descr ""))
+)

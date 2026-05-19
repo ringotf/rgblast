@@ -139,6 +139,9 @@ const uint BLUE_NOT_ENABLE_PIN = 22;
 const uint NTSC_PAL_PIN = 11;
 const uint PAUSE_PIN = 20;
 
+const uint SWITCH_R_PIN = 21;
+const uint SWITCH_GB_PIN = 22;
+
 
 const uint USER_BTN_PIN = 24;
 
@@ -613,13 +616,21 @@ static inline void pio_6bpp_color_read_program_init(PIO pio, uint sm, uint offse
 }
 
 static inline void pio_6bpp_color_read_pixel_program_init(PIO pio, uint sm, uint offset, uint startPin) {
+    
+    
     pio_sm_config c = pio_6bpp_color_read_pixel_program_get_default_config(offset);
     sm_config_set_in_pins(&c, startPin);
     pio_sm_set_consecutive_pindirs(pio, sm, startPin, 9, false);
+
     sm_config_set_in_shift(&c, false, true, 32);
     //sm_config_set_in_shift(&c, false, true, 6);
 
     //sm_config_set_sideset_pins(&c, RED_NOT_ENABLE_PIN);
+    
+    //pio_gpio_init(pio, SWITCH_R_PIN);
+    //pio_gpio_init(pio, SWITCH_GB_PIN);
+    //pio_sm_set_consecutive_pindirs(pio, sm, SWITCH_R_PIN, 2, true);
+    //sm_config_set_sideset_pins(&c, SWITCH_R_PIN);
 
     //sm_config_set_clkdiv(&c, (DVI_TIMING.bit_clk_khz / sms_clock_pal_khz));
     sm_config_set_clkdiv(&c, 1.0f);
@@ -691,6 +702,11 @@ void config_pio()
     //pio_gpio_init(vidPIO, BLUE_NOT_ENABLE_PIN); 
 
     //pio_sm_set_consecutive_pindirs(vidPIO, sm_pixels_read, RED_NOT_ENABLE_PIN, 3, true);
+
+
+    
+	
+
 
     pio_6bpp_color_read_pixel_program_init(vidPIO, sm_pixels_read, offset_pixels_read, RED_ADC_IN_PIN);
     pio_6bpp_color_read_program_init(vidPIO, sm_pixels, offset_pixels, RED_ADC_IN_PIN);
