@@ -1,4 +1,4 @@
-.define csync_gpio 10
+.define csync_gpio 27
 
 .program vsync_detector
 .wrap_target

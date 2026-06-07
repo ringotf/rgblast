@@ -24,65 +24,67 @@
 
 #include "main.h"
 
+/*
+#include "pico/mutex.h"
+static mutex_t printf_mutex;
+
+void safe_printf(const char* format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    
+    mutex_enter_blocking(&printf_mutex);
+    vprintf(format, args);
+    //printf(format, args);
+    mutex_exit(&printf_mutex);
+    
+    va_end(args);
+}
+*/
+
+
+#include "pico/util/queue.h"
+
+#define LOG_QUEUE_LENGTH 16
+
+typedef struct {
+    char msg[80];
+} log_entry_t;
+
+static queue_t log_queue;
+
+/*
+// ====================== Initialization (on Core 0) ======================
+void init_logging(void) {
+    queue_init(&log_queue, sizeof(log_entry_t), LOG_QUEUE_LENGTH);
+}
+
+
+// ====================== Safe logging from Core 1 ======================
+void log_from_core1(const char* format, ...) {
+    log_entry_t entry;
+    va_list args;
+    va_start(args, format);
+    vsnprintf(entry.msg, sizeof(entry.msg), format, args);
+    va_end(args);
+    
+    queue_try_add(&log_queue, &entry);   // non-blocking
+}
+
+// ====================== Process logs on Core 0 (in main loop) ======================
+void process_logs(void) {
+    log_entry_t entry;
+    while (queue_try_remove(&log_queue, &entry)) {
+        printf("%s", entry.msg);
+        stdio_flush();        // optional but helpful
+    }
+}
+*/
 
 #define IMAGE_SIZE_PIXELS (pixels_in_scanline*scanlines_in_active_area)
 #define PIXELS_PER_WORD 1 //5 // 5px*6bpp+2bits
 #define IMAGE_SIZE_WORDS (IMAGE_SIZE_PIXELS/PIXELS_PER_WORD)
 #define IMAGE_SIZE_BYTES (IMAGE_SIZE_WORDS) //(IMAGE_SIZE_WORDS*4)
-
-
-__attribute__((aligned(0x8)))
- unsigned char TWO_BIT_LUT[8] = {
-    0b00,
-    0b01,
-    0b10,
-    0b10,
-    0b11,
-    0b11,
-    0b11,
-    0b11
-};
-
-__attribute__((aligned(0x8)))
- unsigned char ONE_BIT_LUT[8] = {
-    0b00,
-    0b10,
-    0b10,
-    0b11,
-};
-
-__attribute__((aligned(0x200)))
-unsigned char SIX_BIT_LUT[512];
-
-
-void generate_lut()
-{
-    printf("%s: Generating Lut...\n", __func__);
-
-    for(uint16_t r = 0; r < 8; r++)
-    { 
-        for(uint16_t g = 0; g < 8; g++)
-        {
-            for(uint16_t b = 0; b < 8; b++)
-            {
-
-                uint16_t r_value = TWO_BIT_LUT[r];
-                uint16_t g_value = TWO_BIT_LUT[g];
-                uint16_t b_value = TWO_BIT_LUT[b];
-
-                uint16_t lut_value = (r_value << 4) | (g_value << 2) | (b_value);
-
-                uint16_t lut_index = (r * 64) + (g * 8) + b;
-                SIX_BIT_LUT[lut_index] = lut_value;
-
-                
-                //printf("R: %d G: %d B: %d Index: %04X %012b, Value: %04X %06b\n", r, g, b, lut_index, lut_index, lut_value, lut_value);
-
-            }
-        }
-    }
-
-}
 
 
 PIO vidPIO = pio0;
@@ -115,7 +117,7 @@ bool frameReady;
 
 // sync reading
 // const uint SYNC_OUT_PIN = 22; // this will have to be disabled with FTDI, not enough pins
-const uint SYNC_IN_PIN = 10; //15;
+const uint SYNC_IN_PIN = 27; //15;
 
 // pixel reading
 // const uint RGB_IN_STATUS_OUT_PIN = 28;  // this will have to be disabled with FTDI, not enough pins
@@ -136,11 +138,13 @@ const uint GREEN_NOT_ENABLE_PIN = 21;
 const uint BLUE_NOT_ENABLE_PIN = 22;
 */
 
-const uint NTSC_PAL_PIN = 11;
-const uint PAUSE_PIN = 20;
+const uint NTSC_PAL_PIN = 28;
+const uint PAUSE_PIN = 29;
 
-const uint SWITCH_R_PIN = 21;
-const uint SWITCH_GB_PIN = 22;
+const uint SWITCH_R_PIN = 9;
+const uint SWITCH_GB_PIN = 10;
+const uint SWITCH_G_PIN = 10;
+const uint SWITCH_B_PIN = 11;
 
 
 const uint USER_BTN_PIN = 24;
@@ -150,10 +154,10 @@ const uint USER_BTN_PIN = 24;
 
 
 //libdvi output
-#define dvi_d2_pins_base 16
-#define dvi_d1_pins_base 18
-#define dvi_d0_pins_base 12
-#define dvi_clk_pins_base 14
+#define dvi_d2_pins_base 22
+#define dvi_d1_pins_base 20
+#define dvi_d0_pins_base 13
+#define dvi_clk_pins_base 15
 
 //
 //libdvi config
@@ -202,6 +206,82 @@ __attribute__((section(".time_critical.ram")))
 static uint16_t audio_buffer[AUDIO_BUFFER_SIZE];
 
 static const uint32_t audio_buffer_addr = (uint32_t)audio_buffer;
+
+
+
+
+__attribute__((aligned(0x8)))
+ unsigned char TWO_BIT_LUT[8] = {
+    0b00,
+    0b01,
+    0b10,
+    0b10,
+    0b11,
+    0b11,
+    0b11,
+    0b11
+};
+
+__attribute__((aligned(0x8)))
+ unsigned char TWO_BIT_LUT_INVERTED[8] = {
+
+    0b11,
+    0b10,
+    0b01,
+    0b01,
+    0b00,
+    0b00,
+    0b00,
+    0b00
+
+};
+
+__attribute__((aligned(0x8)))
+ unsigned char ONE_BIT_LUT[8] = {
+    0b00,
+    0b10,
+    0b10,
+    0b11,
+};
+
+__attribute__((aligned(0x200)))
+unsigned char SIX_BIT_LUT[512];
+
+
+void generate_lut()
+{
+    printf("%s: Generating Lut...\n", __func__);
+
+    for(uint16_t r = 0; r < 8; r++)
+    { 
+        for(uint16_t g = 0; g < 8; g++)
+        {
+            for(uint16_t b = 0; b < 8; b++)
+            {
+
+                uint16_t r_value = TWO_BIT_LUT[r];
+                uint16_t g_value = TWO_BIT_LUT[g];
+                uint16_t b_value = TWO_BIT_LUT[b];
+
+                //uint16_t r_value = TWO_BIT_LUT_INVERTED[r];
+                //uint16_t g_value = TWO_BIT_LUT_INVERTED[g];
+                //uint16_t b_value = TWO_BIT_LUT_INVERTED[b];
+
+                
+                uint16_t lut_value = (r_value << 4) | (g_value << 2) | (b_value);
+
+                uint16_t lut_index = (r * 64) + (g * 8) + b;
+                SIX_BIT_LUT[lut_index] = lut_value;
+
+                
+                //printf("R: %d G: %d B: %d Index: %04X %012b, Value: %04X %06b\n", r, g, b, lut_index, lut_index, lut_value, lut_value);
+
+            }
+        }
+    }
+
+}
+
 
 
 //
@@ -340,8 +420,8 @@ bool __not_in_flash_func(dvi_audio_timer_callback_dma)(struct repeating_timer *t
 
 		audio_write_pos = samples_written - (samples_written % 2);
 		
-		printf("Trans Count: %u | Buffer Size: %u | samples requested: %u | Samples Available: %d | write_pos: %u | read_pos: %u \n",
-           current_trans_count, AUDIO_BUFFER_SIZE, size, audio_write_pos-audio_read_pos, audio_write_pos, audio_read_pos);
+		//printf("Trans Count: %u | Buffer Size: %u | samples requested: %u | Samples Available: %d | write_pos: %u | read_pos: %u \n",
+        //   current_trans_count, AUDIO_BUFFER_SIZE, size, audio_write_pos-audio_read_pos, audio_write_pos, audio_read_pos);
 		//printf("Trans Count: %u | Buffer Size: %u | samples requested: %u | Samples written: %u | write_pos: %u | read_pos: %u | FIFO level: %d\n",
         //   current_trans_count, AUDIO_BUFFER_SIZE, size, samples_written, audio_write_pos, audio_read_pos, adc_fifo_get_level());
 		//printf("DMA addr: 0x%08X | Samples written: %u | write_pos: %u | read_pos: %u | FIFO level: %d | Request Size: %d | Buffer Size: %d\n",
@@ -402,15 +482,18 @@ bool __not_in_flash_func(adc_callback_test)(struct repeating_timer *t)
 }
 */
 
+//static void inline __attribute__((always_inline)) config_audio()
 void config_audio()
 {
 
     printf("%s: Configuring Audio, buffer size: %d\n", __func__, AUDIO_BUFFER_SIZE);
+    //log_from_core1("Configuring Audio, buffer size\n");
+    //printf("hi\n");
 
 	for(uint32_t i = 0; i < AUDIO_BUFFER_SIZE; i++)
 	{
 		//audio_buffer[i] = 2048;
-        audio_buffer[i] = 1234;
+        audio_buffer[i] = 0; //1234;
 	}
 
 	adc_init();
@@ -493,7 +576,6 @@ void core1_main()
 {
     //allow the other core to take over if the flash becomes active
     //flash_safe_execute_core_init(); //this breaks audio right now - this core doesnt need to do anything in flash though... right??
-
 	
 	//
 	//DVI INIT
@@ -536,12 +618,14 @@ void core1_main()
 		else*/
 		{
 			printf("%s: starting DVI in SMS mode\n", __func__);
+            //printf("starting DVI in SMS mode\n");
 			dvi0.vertical_repeat = DVI_VERTICAL_REPEAT_SMS;
 			dvi_register_irqs_this_core(&dvi0, DVI_DMA_IRQ);
 			dvi_start(&dvi0);
 			//dvi_scanbuf_main_12bpp_noqueue_sms(&dvi0, framebuffer, framebuffer2, dma_chan_fb1_write, dma_chan_fb2_write);
             dvi_scanbuf_main_12bpp_noqueue_sms(&dvi0, IMAGE_DATA);
 			printf("%s: stopping DVI in SMS mode\n", __func__);
+            //printf("stopping DVI in SMS mode\n");
 		}
 		dvi_stop(&dvi0);
 	}
@@ -627,10 +711,13 @@ static inline void pio_6bpp_color_read_pixel_program_init(PIO pio, uint sm, uint
 
     //sm_config_set_sideset_pins(&c, RED_NOT_ENABLE_PIN);
     
-    //pio_gpio_init(pio, SWITCH_R_PIN);
+    pio_gpio_init(pio, SWITCH_R_PIN);
+    pio_gpio_init(pio, SWITCH_G_PIN);
+    pio_gpio_init(pio, SWITCH_B_PIN);
     //pio_gpio_init(pio, SWITCH_GB_PIN);
-    //pio_sm_set_consecutive_pindirs(pio, sm, SWITCH_R_PIN, 2, true);
-    //sm_config_set_sideset_pins(&c, SWITCH_R_PIN);
+
+    pio_sm_set_consecutive_pindirs(pio, sm, SWITCH_R_PIN, 3, true);
+    sm_config_set_sideset_pins(&c, SWITCH_R_PIN);
 
     //sm_config_set_clkdiv(&c, (DVI_TIMING.bit_clk_khz / sms_clock_pal_khz));
     sm_config_set_clkdiv(&c, 1.0f);
@@ -704,7 +791,9 @@ void config_pio()
     //pio_sm_set_consecutive_pindirs(vidPIO, sm_pixels_read, RED_NOT_ENABLE_PIN, 3, true);
 
 
-    
+    //gpio_set_pulls(RED_ADC_IN_PIN, false, true);
+    //gpio_set_pulls(RED_ADC_IN_PIN+1, false, true);
+    //gpio_set_pulls(RED_ADC_IN_PIN+2, false, true);
 	
 
 
@@ -1000,6 +1089,16 @@ bool save_config()
     
 }
 
+#ifdef VIDEO_MODE_NTSC
+bool current_ntsc = true;
+#endif
+#ifdef VIDEO_MODE_PAL
+bool current_ntsc = false;
+#endif
+#ifdef VIDEO_MODE_PAL60
+bool current_ntsc = true;
+#endif
+
 
 void load_config()
 {
@@ -1015,7 +1114,7 @@ void load_config()
         current_config.identifier = (uint32_t)CONFIG_IDENTIFIER;
         current_config.version = (uint32_t)CONFIG_VERSION;
         
-        current_config.ntsc_pal_toggle = 0;
+        current_config.ntsc_pal_toggle = current_ntsc;
 
         sleep_ms(10);
 
@@ -1079,7 +1178,6 @@ void pio_stop()
 }
 
 
-bool current_ntsc = false;
 
 void toggle_ntsc_pal_mode()
 {
@@ -1112,9 +1210,13 @@ void toggle_ntsc_pal_mode()
 */
 } 
 
- const uint LED_PIN = PICO_DEFAULT_LED_PIN;
+ const uint LED_PIN = 17; //PICO_DEFAULT_LED_PIN;
 
+//#define CORE1_STACK_SIZE 2048
+//static uint8_t core1_stack[2048];
 
+//#define CORE1_STACK_SIZE_BYTES 16384
+//static uint32_t core1_stack[CORE1_STACK_SIZE_BYTES / 4];
 
 int main()
 {
@@ -1123,13 +1225,20 @@ int main()
 	sleep_ms(10);
 	set_sys_clock_khz(DVI_TIMING.bit_clk_khz, true);
 
+	sleep_ms(100);
+
+    //mutex_init(&printf_mutex);
+    //init_logging();
+    queue_init(&log_queue, sizeof(log_entry_t), LOG_QUEUE_LENGTH); //this prevents core0 crashing... for some strange reason??
+
+	sleep_ms(100);
 
 	//stdio_init_all();
-    //stdio_usb_init();
+    stdio_usb_init();
     
-	sleep_ms(1000);
+	sleep_ms(500);
 	printf("------------\n");
-	printf("PICO SMS RGB\n");
+	printf("RGBlast SMS\n");
 	printf("------------\n");
 	sleep_ms(10);
 
@@ -1140,6 +1249,7 @@ int main()
 
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN, GPIO_OUT);
+    gpio_put(LED_PIN, 1);
 
 
     gpio_init(NTSC_PAL_PIN);
@@ -1161,12 +1271,14 @@ int main()
 
 
     gpio_init(PAUSE_PIN);
+    gpio_set_pulls(PAUSE_PIN, true, false);
     gpio_set_dir(PAUSE_PIN, GPIO_IN);
-    //gpio_set_pulls(PAUSE_PIN, false, false);
 
+/*
     gpio_init(USER_BTN_PIN);
     gpio_set_dir(USER_BTN_PIN, GPIO_IN);
     gpio_set_pulls(USER_BTN_PIN, true, false);
+*/
 
 	sleep_ms(10);
 
@@ -1196,6 +1308,14 @@ int main()
     
 	multicore_reset_core1();
 
+    //uint32_t *stack_top = (uint32_t *)(core1_stack + sizeof(core1_stack));
+    //multicore_launch_core1_with_stack(core1_main, stack_top, sizeof(core1_stack));
+
+    //uint32_t *stack_top = (uint32_t *)(core1_stack + sizeof(core1_stack));
+    //multicore_launch_core1_with_stack(core1_main, stack_top, CORE1_STACK_SIZE);
+    
+    //multicore_launch_core1_with_stack(core1_main, (uint32_t*)&core1_stack[CORE1_STACK_SIZE_BYTES / 4 - 1], CORE1_STACK_SIZE_BYTES);
+
 	multicore_launch_core1(core1_main); //libdvi core
 
     frameReady = false;
@@ -1211,9 +1331,13 @@ int main()
 
     frameReady = true;
     gpio_put(LED_PIN, frameReady);
-    uint32_t led_timer = 0;
+    uint32_t led_timer_interval = 500;
+    uint32_t led_timer = led_timer_interval;
 
     while (1) {
+        //stdio_flush();
+        //process_logs();
+
         //gpio_put(LED_PIN, true);
         //processNextFrame();
         //busy_wait_at_least_cycles(133);
@@ -1221,14 +1345,16 @@ int main()
         //printf("test\n");
 
 
-        time_now = time_us_32();
+        //time_now = time_us_32();
 
 	    //sleep_ms(200);
-        if(time_now > led_timer)
+        //if(time_now > led_timer)
+        if(--led_timer <= 0)
         {
             frameReady = !frameReady;
             gpio_put(LED_PIN, frameReady);
-            led_timer = time_now + (200 * 1000); //200ms
+            //led_timer = time_now + (20 * 1000); //200ms
+            led_timer = led_timer_interval;
         }
         //sleep_ms(2);
 
@@ -1244,7 +1370,6 @@ int main()
             pause_was_pressed = true;
 
             pause_up = false;
-
             //printf("Pause Pressed?\n");
 
             /*if(pause_down)
@@ -1318,13 +1443,13 @@ int main()
                         pause_count = 0;
                         pause_timeout = 0;
 
+                        //commented out for testing as this seems to crash this core???
                         toggle_ntsc_pal_mode();
+
                         //gpio_put(LED_PIN, current_ntsc);
                     }
                 }
             }
-
-
 
         }
 
@@ -1337,6 +1462,7 @@ int main()
         }*/
 
         
+        //printf("?");
 
         sleep_ms(1);
     

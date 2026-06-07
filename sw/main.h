@@ -16,7 +16,6 @@
 
 #define pixels_in_scanline 300 //250 //256 
 
-#define scanlines_in_active_area  300 //190 //193  
 
 #define sms_v_lines_to_skip_pal 45 //8 //89
 #define sms_v_lines_to_skip_ntsc 18 //"ntsc" mode on a pal sms???
@@ -35,6 +34,11 @@
 #define sms_pixel_height 192 //190 //192
 //#define sms_pixel_x_offset 0 
 #define sms_pixel_x_offset_dvi 37 
+
+
+
+#define scanlines_in_active_area  (sms_pixel_height + sms_v_lines_to_skip + 24) //300 //190 //193  
+
 
 #ifndef DVI_VERTICAL_REPEAT_SMS
 #define DVI_VERTICAL_REPEAT_SMS 2

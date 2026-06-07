@@ -6,7 +6,7 @@
 entry_point:
     mov x y ;[31]   ; get "y" pixels also delay about another 2 px for some reason
 
-    wait 1 irq 0 [5];  [13] ;[31]
+    wait 1 irq 0 [4];  [13] ;[31]
     ;irq set 0 ; as soon as we get in, re-flag the irq
 
     ; we don't want to retrigger until the next hsync
@@ -25,42 +25,33 @@ pixelloop1:
 
 
 .program pio_6bpp_color_read_pixel
-;.side_set 2 opt
+.side_set 3 opt
 .wrap_target
-    in y 23  side 0b00 ; 0b00 channel 1
+    in y 23  side 0b110    ;  0b001 ; 0b001 channel 1
     wait 1 irq 1 
-    in pins 9  ; 8bit
+    ;in pins 9  ; 8bit adc
 
     ;Red
-    ;in pins 3 [3] side 0b01 ; 0b01 channel 2 
+    in pins 3 [1] side 0b101    ; 0b010 ; 0b010 channel 2 
 
     ;settle
-    ;nop [3] 
-    ;nop [0]
+    nop [1] 
+    nop [1] 
+    nop [1]  
 
     ;Green
-    ;in pins 3 [3] side 0b11 ; 0b11 channel 3
+    in pins 3 [1] side 0b011    ; 0b100 ; 0b100 channel 3 
 
     ;settle
-    ;nop [3]
+    nop [1] 
+    nop [1] 
+    nop [1] 
 
     ;Blue
-    ;in pins 3  side 0b00 ; 0b00 channel 1
-
-
-    ;in pins 3 [3] side 0b01
-    ;nop [3]
-    ;in pins 3 [3] side 0b11
-    ;nop [3]
-    ;in pins 3  side 0b00
+    in pins 3  side 0b110     ; 0b001 ; 0b001 channel 1
 
 
 
-;    in pins 3 side 0b01 [3]  ; 8bit
-;    nop [3]
-;    in pins 3 side 0b11 [3] ; 8bit
-;    nop [3]
-;    in pins 3 side 0b00 ; 8bit
 
 .wrap
 

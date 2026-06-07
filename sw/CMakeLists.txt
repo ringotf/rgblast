@@ -41,6 +41,12 @@ set(project_name_pal60 RGBLAST_SMS_PAL60 )
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
+
+#set(PICO_STACK_SIZE 12288)
+#set(PICO_CORE1_STACK_SIZE 16384)
+#add_compile_definitions(PICO_USE_STACK_GUARDS=1)
+
+
 # Add executable. Default name is the project name, version 0.1
 
 set(COMMON_SOURCES 
@@ -133,3 +139,14 @@ target_compile_definitions(${project_name_pal60} PRIVATE PICO_FLASH_ASSUME_CORE1
 target_compile_definitions(${project_name_ntsc} PRIVATE VIDEO_MODE_NTSC=1)
 target_compile_definitions(${project_name_pal} PRIVATE VIDEO_MODE_PAL=1)
 target_compile_definitions(${project_name_pal60} PRIVATE VIDEO_MODE_PAL60=1)
+
+
+#target_link_options(${project_name_ntsc} PRIVATE "-Wl,--section-start=.flashdata=0x10000000" 
+#    -ffunction-sections  
+#    -fdata-sections 
+#    -Wl,--gc-sections 
+#    -Wl,--print-memory-usage )
+
+target_link_options(${project_name_ntsc} PRIVATE "LINKER:--print-memory-usage")
+target_link_options(${project_name_pal} PRIVATE "LINKER:--print-memory-usage")
+target_link_options(${project_name_pal60} PRIVATE "LINKER:--print-memory-usage")
