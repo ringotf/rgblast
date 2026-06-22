@@ -1,12 +1,15 @@
+.define vclk_gpio 25
+.define csync_gpio 27
+
+; This reads one horizontal line of pixels only
 .program pio_6bpp_color_read
 .wrap_target
     ;irq clear 0
     
-    ; This reads one horizontal line of pixels only
-entry_point:
     mov x y ;[31]   ; get "y" pixels also delay about another 2 px for some reason
 
-    wait 1 irq 0 [2];  [4] ;wait for hsync signal on irq 0
+    wait 1 irq 0 ;[11]  ;wait for hsync signal on irq 0
+
 
     ;irq set 0 ; as soon as we get in, re-flag the irq
 
@@ -15,13 +18,14 @@ entry_point:
 hblank: ; this looks weird but: 44px * 8 cycles pp = 352
 ;    jmp x-- hblank [11] ; 352 / 32 = 11 cycles per loop
 
+    ;wait 0 gpio vclk_gpio 
+    ;wait 1 gpio vclk_gpio 
+
 pixelloop1:
-    irq set 1 [18] ; [23]       ;trigger a pixel read, wait for next pixel
-    ;nop [23]
-    ;in pins 6 [9] ; 8bit
-    ;in null 2     ; 2bits
-    jmp x-- pixelloop1
-    ;jmp entry_point
+
+    irq set 1  [31] ; [18]       ;trigger a pixel read, wait for next pixel
+
+    jmp x-- pixelloop1 [7]
 .wrap
 
 
@@ -32,6 +36,11 @@ pixelloop1:
     wait 1 irq 1 
     ;in pins 9  ; 8bit adc
 
+    ;in pins 3
+    ;in pins 3
+    ;in pins 3
+
+
     ;Red
     in pins 3 [1] side 0b010    ; 0b101 ; 0b010 channel 2 
 
@@ -39,8 +48,8 @@ pixelloop1:
     nop [1]
     nop [1]
     nop [1]
-    ;nop [1] ;extra timing if needed
-    ;nop [1] ;extra timing if needed
+    nop [1] ;extra timing if needed
+    ;;nop [1] ;extra timing if needed
 
     ;Green
     in pins 3 [1] side 0b100    ; 0b011 ; 0b100 channel 3 
@@ -49,9 +58,9 @@ pixelloop1:
     nop [1]
     nop [1]
     nop [1]
-    ;nop [1] ;extra timing if needed
-    ;nop [1] ;extra timing if needed
-    ;nop [1] ;extra timing if needed
+    nop [1] ;extra timing if needed
+    ;;nop [1] ;extra timing if needed
+    ;;nop [1] ;extra timing if needed
 
     ;Blue
     in pins 3  side 0b001     ; 0b110 ; 0b001 channel 1

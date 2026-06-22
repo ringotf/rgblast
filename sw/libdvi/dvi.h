@@ -101,6 +101,9 @@ void dvi_scanbuf_main_12bpp(struct dvi_inst *inst);
 //void dvi_scanbuf_main_12bpp_noqueue_sms(struct dvi_inst *inst, uint16_t *scanbuf1, uint16_t *scanbuf2, uint32_t dma_chan_fb1, uint32_t dma_chan_fb2);
 void dvi_scanbuf_main_12bpp_noqueue_sms(struct dvi_inst *inst, char *scanbuf1);
 
+void dvi_scanbuf_main_12bpp_noqueue_md(struct dvi_inst *inst, char *scanbuf1);
+void dvi_scanbuf_main_16bpp_noqueue_md(struct dvi_inst *inst, uint16_t *scanbuf1);
+
 //Stops DVI pairs generations
 void dvi_stop(struct dvi_inst *inst);
 

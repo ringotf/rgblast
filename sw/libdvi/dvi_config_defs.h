@@ -115,6 +115,32 @@
 #endif
 
 
+//  15bpp layout for MD screen
+
+#ifndef DVI_15BPP_RED_MSB
+#define DVI_15BPP_RED_MSB 14
+#endif
+
+#ifndef DVI_15BPP_RED_LSB
+#define DVI_15BPP_RED_LSB 10
+#endif
+
+#ifndef DVI_15BPP_GREEN_MSB
+#define DVI_15BPP_GREEN_MSB 9
+#endif
+
+#ifndef DVI_15BPP_GREEN_LSB
+#define DVI_15BPP_GREEN_LSB 5
+#endif
+
+#ifndef DVI_15BPP_BLUE_MSB
+#define DVI_15BPP_BLUE_MSB 4
+#endif
+
+#ifndef DVI_15BPP_BLUE_LSB
+#define DVI_15BPP_BLUE_LSB 0
+#endif
+
 
 
 // Default 8bpp layout: RGB332, {r[2:0], g[2:0], b[1:0]}
@@ -142,6 +168,7 @@
 #ifndef DVI_8BPP_BLUE_LSB
 #define DVI_8BPP_BLUE_LSB 0
 #endif
+
 
 // Default 16bpp layout: RGB565, {r[4:0], g[5:0], b[4:0]}
 

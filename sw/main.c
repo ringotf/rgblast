@@ -15,7 +15,14 @@
 #include "hardware/flash.h"
 
 #include "vsync_detector.pio.h"
+
+#ifdef CONSOLE_SMS
 #include "pio_6bpp_color_read.pio.h"
+#endif
+#ifdef CONSOLE_MD
+#include "pio_8bit_color_read.pio.h"
+#endif
+
 //#include "flash_adc.pio.h"
 
 #include "libdvi/dvi.h"
@@ -82,27 +89,38 @@ void process_logs(void) {
 */
 
 #define IMAGE_SIZE_PIXELS (pixels_in_scanline*scanlines_in_active_area)
-#define PIXELS_PER_WORD 1 //5 // 5px*6bpp+2bits
-#define IMAGE_SIZE_WORDS (IMAGE_SIZE_PIXELS/PIXELS_PER_WORD)
-#define IMAGE_SIZE_BYTES (IMAGE_SIZE_WORDS) //(IMAGE_SIZE_WORDS*4)
+//#define BYTES_PER_PIXEL 2 //5 // 5px*6bpp+2bits
+//#define IMAGE_SIZE_BYTES (IMAGE_SIZE_PIXELS*BYTES_PER_PIXEL) //(IMAGE_SIZE_WORDS*4)
 
 
 PIO vidPIO = pio0;
 uint sm_sync = 0;
 uint sm_pixels = 1;
+
+#ifdef CONSOLE_SMS
 uint sm_pixels_read = 2;
+#endif
+#ifdef CONSOLE_MD
+uint sm_rgbmux_switcher = 2; //3;
+#endif
 
 
 uint offset_sync;
 uint offset_pixels;
+
+#ifdef CONSOLE_SMS
 uint offset_pixels_read;
+#endif
+#ifdef CONSOLE_MD
+uint offset_rgbmux;
+#endif
 
 //uint32_t IMAGE_DATA[IMAGE_SIZE_WORDS+1];
-unsigned char IMAGE_DATA[IMAGE_SIZE_WORDS];
-unsigned char * IMAGE_DATA_ADDRESS = IMAGE_DATA;
+uint16_t IMAGE_DATA[IMAGE_SIZE_PIXELS];
+uint16_t * IMAGE_DATA_ADDRESS = IMAGE_DATA;
 
-int dma_chan_capture;
-int dma_chan_reset;
+//int dma_chan_capture;
+//int dma_chan_reset;
 
 int dma_chan_lookup_capture;
 int dma_chan_write_capture;
@@ -146,6 +164,7 @@ const uint SWITCH_GB_PIN = 10;
 const uint SWITCH_G_PIN = 10;
 const uint SWITCH_B_PIN = 11;
 
+const uint ADC_CLK_PIN = 12;
 
 const uint USER_BTN_PIN = 24;
 
@@ -346,6 +365,236 @@ void fill_framebuffer_with_test_pattern() {
 			{
 				//blue
 				pixel |= row_val;
+			}
+			
+
+			IMAGE_DATA[x + (y * pixels_in_scanline)]  = pixel;
+			//framebuffer2[x + (y * pixels_in_scanline)]  = ~pixel;
+			//framebuffer2[x + (y * pixels_in_scanline)]  = pixel;
+
+		}
+	}
+
+	//draws an outline around the rendered portion, in theory
+	/*if(gg_now)
+	{
+		draw_rectangle_empty(framebuffer, gg_pixel_x_offset + 45, gg_v_lines_to_skip, gg_pixel_width, gg_pixel_height, 0xFFF);
+		draw_rectangle_empty(framebuffer2, gg_pixel_x_offset + 45, gg_v_lines_to_skip, gg_pixel_width, gg_pixel_height, 0xFFF);
+	}
+	else
+	{
+		draw_rectangle_empty(framebuffer, sms_pixel_x_offset, sms_v_lines_to_skip, sms_pixel_width, sms_pixel_height, 0xFFF);
+		draw_rectangle_empty(framebuffer2, sms_pixel_x_offset, sms_v_lines_to_skip, sms_pixel_width, sms_pixel_height, 0xFFF);
+	}*/
+
+}
+
+void fill_framebuffer_with_test_pattern_12bit() {
+	uint16_t test_divs = pixels_in_scanline / 8;	
+	uint16_t row_size = scanlines_in_active_area / 3;
+	uint16_t row_diff = 1;
+
+    uint16_t pixel = 0;
+
+	for(uint32_t y = 0; y < scanlines_in_active_area; y++) {
+		uint16_t row_val = (y / row_size);
+		row_val = row_diff * row_val;
+		row_val = 0b1111 - row_val;
+
+		//uint16_t row_val = 15;
+
+		for(uint32_t x = 0; x < pixels_in_scanline; x++) {
+
+            pixel = 0;
+
+			if(x < test_divs)
+			{
+				//white
+				pixel |= (row_val>>0);  //B
+				pixel |= (row_val << 4); //G
+				pixel |= ((row_val>>0) << 8); //R
+			}
+			else if (x < test_divs * 2)
+			{
+				//yellow
+				pixel |= (row_val << 4); //G
+				pixel |= ((row_val>>0) << 8); //R
+				
+			}
+			else if (x < test_divs * 3)
+			{
+				//teal
+				pixel |= (row_val>>0); //B
+				pixel |= (row_val << 4); //G
+			
+			}
+			else if (x < test_divs * 4)
+			{
+				//green
+				pixel |= (row_val << 4); //G
+			}
+			else if (x < test_divs * 5)
+			{
+				//purple
+				pixel |= (row_val>>0); //B
+				pixel |= ((row_val>>0) << 8); //R
+			}
+			else if (x < test_divs * 6)
+			{
+				//red
+				pixel |= ((row_val>>0) << 8); //R
+			}
+			else if (x < test_divs * 7)
+			{
+				//blue
+				pixel |= (row_val>>0); //B
+			}
+			
+
+			IMAGE_DATA[x + (y * pixels_in_scanline)]  = pixel;
+			//framebuffer2[x + (y * pixels_in_scanline)]  = ~pixel;
+			//framebuffer2[x + (y * pixels_in_scanline)]  = pixel;
+
+		}
+	}
+
+
+}
+
+
+void fill_framebuffer_with_test_pattern_15bit() {
+	uint16_t test_divs = pixels_in_scanline / 8;	
+	uint16_t row_size = scanlines_in_active_area / 3;
+	uint16_t row_diff = 1;
+
+    uint16_t pixel = 0;
+
+	for(uint32_t y = 0; y < scanlines_in_active_area; y++) {
+		uint16_t row_val = (y / row_size);
+		row_val = row_diff * row_val;
+		row_val = 0b11111 - row_val;
+
+		//uint16_t row_val = 15;
+
+		for(uint32_t x = 0; x < pixels_in_scanline; x++) {
+
+            pixel = 0;
+
+			if(x < test_divs)
+			{
+				//white
+				pixel |= (row_val>>0);  //B
+				pixel |= (row_val << 5); //G
+				pixel |= ((row_val>>0) << 10); //R
+			}
+			else if (x < test_divs * 2)
+			{
+				//yellow
+				pixel |= (row_val << 5); //G
+				pixel |= ((row_val>>0) << 10); //R
+				
+			}
+			else if (x < test_divs * 3)
+			{
+				//teal
+				pixel |= (row_val>>0); //B
+				pixel |= (row_val << 5); //G
+			
+			}
+			else if (x < test_divs * 4)
+			{
+				//green
+				pixel |= (row_val << 5); //G
+			}
+			else if (x < test_divs * 5)
+			{
+				//purple
+				pixel |= (row_val>>0); //B
+				pixel |= ((row_val>>0) << 10); //R
+			}
+			else if (x < test_divs * 6)
+			{
+				//red
+				pixel |= ((row_val>>0) << 10); //R
+			}
+			else if (x < test_divs * 7)
+			{
+				//blue
+				pixel |= (row_val>>0); //B
+			}
+			
+
+			IMAGE_DATA[x + (y * pixels_in_scanline)]  = pixel;
+			//framebuffer2[x + (y * pixels_in_scanline)]  = ~pixel;
+			//framebuffer2[x + (y * pixels_in_scanline)]  = pixel;
+
+		}
+	}
+
+
+}
+
+void fill_framebuffer_with_test_pattern_16bit() {
+	uint16_t test_divs = pixels_in_scanline / 8;	
+	uint16_t row_size = scanlines_in_active_area / 3;
+	uint16_t row_diff = 1;
+
+    uint16_t pixel = 0;
+
+	for(uint32_t y = 0; y < scanlines_in_active_area; y++) {
+		uint16_t row_val = (y / row_size);
+		row_val = row_diff * row_val;
+		row_val = 0b111111 - row_val;
+
+		//uint16_t row_val = 15;
+
+		for(uint32_t x = 0; x < pixels_in_scanline; x++) {
+
+            pixel = 0;
+
+            //16bit RGB is R5 G6 B5 so R and B need a bit shifted out
+
+			if(x < test_divs)
+			{
+				//white
+				pixel |= (row_val>>1);  //B
+				pixel |= (row_val << 5); //G
+				pixel |= ((row_val>>1) << 11); //R
+			}
+			else if (x < test_divs * 2)
+			{
+				//yellow
+				pixel |= (row_val << 5); //G
+				pixel |= ((row_val>>1) << 11); //R
+				
+			}
+			else if (x < test_divs * 3)
+			{
+				//teal
+				pixel |= (row_val>>1); //B
+				pixel |= (row_val << 5); //G
+			
+			}
+			else if (x < test_divs * 4)
+			{
+				//green
+				pixel |= (row_val << 5); //G
+			}
+			else if (x < test_divs * 5)
+			{
+				//purple
+				pixel |= (row_val>>1); //B
+				pixel |= ((row_val>>1) << 11); //R
+			}
+			else if (x < test_divs * 6)
+			{
+				//red
+				pixel |= ((row_val>>1) << 11); //R
+			}
+			else if (x < test_divs * 7)
+			{
+				//blue
+				pixel |= (row_val>>1); //B
 			}
 			
 
@@ -617,14 +866,21 @@ void core1_main()
 		}
 		else*/
 		{
-			printf("%s: starting DVI in SMS mode\n", __func__);
+			printf("%s: starting DVI in MD mode\n", __func__);
             //printf("starting DVI in SMS mode\n");
 			dvi0.vertical_repeat = DVI_VERTICAL_REPEAT_SMS;
 			dvi_register_irqs_this_core(&dvi0, DVI_DMA_IRQ);
 			dvi_start(&dvi0);
+            
+#ifdef CONSOLE_SMS
 			//dvi_scanbuf_main_12bpp_noqueue_sms(&dvi0, framebuffer, framebuffer2, dma_chan_fb1_write, dma_chan_fb2_write);
             dvi_scanbuf_main_12bpp_noqueue_sms(&dvi0, IMAGE_DATA);
-			printf("%s: stopping DVI in SMS mode\n", __func__);
+#endif
+#ifdef CONSOLE_MD
+            //dvi_scanbuf_main_12bpp_noqueue_md(&dvi0, IMAGE_DATA);
+            dvi_scanbuf_main_16bpp_noqueue_md(&dvi0, IMAGE_DATA);
+#endif
+			printf("%s: stopping DVI in MD mode\n", __func__);
             //printf("stopping DVI in SMS mode\n");
 		}
 		dvi_stop(&dvi0);
@@ -681,6 +937,8 @@ static inline void vsync_detector_program_init(PIO pio, uint sm, uint offset, ui
     //pio_sm_set_enabled(pio, sm, true);
 }
 
+
+#ifdef CONSOLE_SMS
 static inline void pio_6bpp_color_read_program_init(PIO pio, uint sm, uint offset, uint startPin) {
     pio_sm_config c = pio_6bpp_color_read_program_get_default_config(offset);
     //sm_config_set_in_pins(&c, startPin);
@@ -691,9 +949,12 @@ static inline void pio_6bpp_color_read_program_init(PIO pio, uint sm, uint offse
     //sm_config_set_clkdiv(&c, (DVI_TIMING.bit_clk_khz / sms_clock_pal_khz));
 
     //float clockdiv = (float)(DVI_TIMING.bit_clk_khz / sms_clock_pal_khz) / 2.f;
-    float clockdiv = (float)(DVI_TIMING.bit_clk_khz / sms_clock_khz) / 2.f;
+
+    //float clockdiv = (float)(DVI_TIMING.bit_clk_khz / sms_clock_khz) / 2.f;
+    /*float clockdiv = (float)(DVI_TIMING.bit_clk_khz / sms_clock_khz) / 4.f;
     sm_config_set_clkdiv(&c, clockdiv);
-    printf("%s: Pixel ClockDiv: %f\n", __func__, clockdiv);
+    printf("%s: Pixel ClockDiv: %f\n", __func__, clockdiv);*/
+    sm_config_set_clkdiv(&c, 1.0f);
 
     // Initialize and enable the state machine.
     pio_sm_init(pio, sm, offset, &c);
@@ -729,13 +990,112 @@ static inline void pio_6bpp_color_read_pixel_program_init(PIO pio, uint sm, uint
     // Initialize and enable the state machine.
     pio_sm_init(pio, sm, offset, &c);
 }
+#endif
+
+#ifdef CONSOLE_MD
+static inline void pio_8bit_color_read_program_init(PIO pio, uint sm, uint offset, uint startPin) {
+    pio_sm_config c = pio_8bit_color_read_program_get_default_config(offset);
+    
+    sm_config_set_in_pins(&c, startPin+3);
+    pio_sm_set_consecutive_pindirs(pio, sm, startPin+3, 5, false);
+    sm_config_set_in_shift(&c, false, true, 15);
+
+    pio_gpio_init(pio, ADC_CLK_PIN);
+    pio_sm_set_consecutive_pindirs(pio, sm, ADC_CLK_PIN, 1, true);
+
+    sm_config_set_sideset_pins(&c, ADC_CLK_PIN);
+    
+    //sm_config_set_clkdiv(&c, 1);
+    //sm_config_set_clkdiv(&c, (DVI_TIMING.bit_clk_khz / sms_clock_pal_khz));
+
+    //float clockdiv = (float)(DVI_TIMING.bit_clk_khz / sms_clock_pal_khz) / 2.f;
+
+    float clockdiv = (float)(DVI_TIMING.bit_clk_khz / sms_clock_khz) / 2.f;
+    //float clockdiv = (float)(DVI_TIMING.bit_clk_khz / sms_clock_khz) / 4.f;
+    sm_config_set_clkdiv(&c, clockdiv);
+    printf("%s: Pixel ClockDiv: %f\n", __func__, clockdiv);
+    //sm_config_set_clkdiv(&c, 1.0f);
+
+    //sm_config_set_set_pins(&c, ADC_CLK_PIN, 1);
+
+    // Initialize and enable the state machine.
+    pio_sm_init(pio, sm, offset, &c);
+}
+
+/*
+static inline void pio_8bit_color_read_pixel_program_init(PIO pio, uint sm, uint offset, uint startPin) {
+    
+    
+    pio_sm_config c = pio_8bit_color_read_pixel_program_get_default_config(offset);
+    sm_config_set_in_pins(&c, startPin+4);
+    //pio_sm_set_consecutive_pindirs(pio, sm, startPin, 9, false);
+    pio_sm_set_consecutive_pindirs(pio, sm, startPin+4, 5, false);
+
+    sm_config_set_in_shift(&c, false, true, 12);
+    //sm_config_set_in_shift(&c, false, true, 6);
+
+    //sm_config_set_sideset_pins(&c, RED_NOT_ENABLE_PIN);
+    
+    pio_gpio_init(pio, SWITCH_R_PIN);
+    pio_gpio_init(pio, SWITCH_G_PIN);
+    pio_gpio_init(pio, SWITCH_B_PIN);
+    //pio_gpio_init(pio, SWITCH_GB_PIN);
+
+    pio_gpio_init(pio, ADC_CLK_PIN);
+
+    pio_sm_set_consecutive_pindirs(pio, sm, SWITCH_R_PIN, 3, true);
+
+    sm_config_set_sideset_pins(&c, SWITCH_R_PIN);
+    
+
+    //sm_config_set_clkdiv(&c, (DVI_TIMING.bit_clk_khz / sms_clock_pal_khz));
+    sm_config_set_clkdiv(&c, 1.0f);
+    
+    //float clockdiv = (float)(DVI_TIMING.bit_clk_khz / sms_clock_pal_khz) / 2.f;
+    //printf("Read Pixel ClockDiv: %f\n", clockdiv);
+    //sm_config_set_clkdiv(&c, clockdiv);
+
+    sm_config_set_set_pins(&c, ADC_CLK_PIN, 1);
+
+    // Initialize and enable the state machine.
+    pio_sm_init(pio, sm, offset, &c);
+}
+*/
+
+static inline void pio_rgbmux_switcher_program_init(PIO pio, uint sm, uint offset, uint firstSwitchPin) {
+    
+    pio_sm_config c = pio_rgbmux_switcher_program_get_default_config(offset);
+
+    pio_gpio_init(pio, firstSwitchPin);
+    pio_gpio_init(pio, firstSwitchPin+1);
+    pio_gpio_init(pio, firstSwitchPin+2);
+
+    pio_sm_set_consecutive_pindirs(pio, sm, firstSwitchPin, 3, true);
+    
+    sm_config_set_sideset_pins(&c, firstSwitchPin);
+
+    sm_config_set_clkdiv(&c, 1.0f);
+    
+    // Initialize and enable the state machine.
+    pio_sm_init(pio, sm, offset, &c);
+}
+
+
+
+#endif
 
 
 void claim_pio_sm()
 {
 	pio_sm_claim(vidPIO, sm_sync);
     pio_sm_claim(vidPIO, sm_pixels);
+#ifdef CONSOLE_SMS
     pio_sm_claim(vidPIO, sm_pixels_read);
+#endif
+#ifdef CONSOLE_MD
+    pio_sm_claim(vidPIO, sm_rgbmux_switcher);
+#endif
+    
 }
 
 void config_pio()
@@ -748,11 +1108,19 @@ void config_pio()
     gpio_set_input_enabled(SYNC_IN_PIN, true);
 
     // PIO pixelReadPIO = pio1;
-    offset_pixels = pio_add_program(vidPIO, &pio_6bpp_color_read_program);
-    
 
+/*    
+#ifdef CONSOLE_SMS
+    offset_pixels = pio_add_program(vidPIO, &pio_6bpp_color_read_program);
     offset_pixels_read = pio_add_program(vidPIO, &pio_6bpp_color_read_pixel_program);
-    
+#endif
+*/
+
+#ifdef CONSOLE_MD
+    offset_pixels = pio_add_program(vidPIO, &pio_8bit_color_read_program);
+    //offset_pixels_read = pio_add_program(vidPIO, &pio_8bit_color_read_pixel_program);
+    offset_rgbmux = pio_add_program(vidPIO, &pio_rgbmux_switcher_program);
+#endif
 
     /*for (uint i=0; i<6; i++) {
         gpio_set_input_enabled(RGB_IN_START_PIN+i, true);
@@ -772,10 +1140,12 @@ void config_pio()
     pio_sm_exec_wait_blocking(vidPIO, sm_pixels, pio_encode_mov(pio_y, pio_osr));
 
 
+#ifdef CONSOLE_SMS
     uint32_t lut_address = ((uint32_t)SIX_BIT_LUT) >> 9;
     pio_sm_put_blocking(vidPIO, sm_pixels_read, lut_address);
     pio_sm_exec_wait_blocking(vidPIO, sm_pixels_read, pio_encode_pull(false, true));
     pio_sm_exec_wait_blocking(vidPIO, sm_pixels_read, pio_encode_mov(pio_y, pio_osr));
+#endif
 
 
     //pio_6bpp_color_read_pixel_program_init(vidPIO, sm_pixels_read, offset_pixels_read, RGB_IN_START_PIN);
@@ -796,9 +1166,17 @@ void config_pio()
     //gpio_set_pulls(RED_ADC_IN_PIN+2, false, true);
 	
 
-
+#ifdef CONSOLE_SMS
     pio_6bpp_color_read_pixel_program_init(vidPIO, sm_pixels_read, offset_pixels_read, RED_ADC_IN_PIN);
     pio_6bpp_color_read_program_init(vidPIO, sm_pixels, offset_pixels, RED_ADC_IN_PIN);
+#endif
+
+#ifdef CONSOLE_MD
+    pio_rgbmux_switcher_program_init(vidPIO, sm_rgbmux_switcher, offset_rgbmux, SWITCH_R_PIN);
+    //pio_8bit_color_read_pixel_program_init(vidPIO, sm_pixels_read, offset_pixels_read, RED_ADC_IN_PIN);
+    pio_8bit_color_read_program_init(vidPIO, sm_pixels, offset_pixels, RED_ADC_IN_PIN);
+    
+#endif
 
     vsync_detector_program_init(vidPIO, sm_sync, offset_sync, SYNC_IN_PIN);
 
@@ -841,6 +1219,7 @@ void claim_dma()
 
 	//DVI code uses claim_unused_channel, so we must as well, instead of explicitly picking DMA channels
 	//DVI audio also claims 2 dma channels
+#ifdef CONSOLE_SMS
     dma_chan_lookup_capture = dma_claim_unused_channel(true);
     dma_chan_write_capture = dma_claim_unused_channel(true);
     dma_chan_lookup_reset = dma_claim_unused_channel(true);
@@ -850,14 +1229,20 @@ void claim_dma()
     printf("%s: dma_chan_write_capture: %d\n", __func__, dma_chan_write_capture);
     printf("%s: dma_chan_lookup_reset: %d\n", __func__, dma_chan_lookup_reset);    
     printf("%s: dma_chan_write_reset: %d\n", __func__, dma_chan_write_reset);
+#endif
+
+#ifdef CONSOLE_MD
+    dma_chan_write_capture = dma_claim_unused_channel(true);
+    dma_chan_write_reset = dma_claim_unused_channel(true);
+    printf("%s: dma_chan_write_capture: %d\n", __func__, dma_chan_write_capture);
+    printf("%s: dma_chan_write_capture: %d\n", __func__, dma_chan_write_capture);
+#endif
+
 }
 
-void config_dma()
-{
-    // Get a free dma channel, panic() if there are none
-    //dma_chan_capture = dma_claim_unused_channel(true);
-    //dma_chan_reset = dma_claim_unused_channel(true);
-    
+#ifdef CONSOLE_SMS
+void config_dma_lookup()
+{    
     
     write_chan_write_address_pointer = &(dma_hw->ch[dma_chan_write_capture].al3_read_addr_trig);
 
@@ -924,46 +1309,56 @@ void config_dma()
         false                                           // Do not start immediately.
     );
 
+}
+#endif
 
-/*
-    dma_channel_config c = dma_channel_get_default_config(dma_chan_capture);
-    channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
+#ifdef CONSOLE_MD
+void config_dma_value()
+{
+    // Get a free dma channel, panic() if there are none
+    //dma_chan_write_capture = dma_claim_unused_channel(true);
+    //dma_chan_write_reset = dma_claim_unused_channel(true);
+    
+
+    dma_channel_config c = dma_channel_get_default_config(dma_chan_write_capture);
+    channel_config_set_transfer_data_size(&c, DMA_SIZE_16);
     channel_config_set_read_increment(&c, false); // We will pull from the RX FIFO, so don't move read ptr
     channel_config_set_write_increment(&c, true);
-    //channel_config_set_dreq(&c, pio_get_dreq(vidPIO, sm_pixels, false));
-    channel_config_set_dreq(&c, pio_get_dreq(vidPIO, sm_pixels_read, false));
-    channel_config_set_chain_to(&c, dma_chan_reset);
+    channel_config_set_dreq(&c, pio_get_dreq(vidPIO, sm_pixels, false));
+    //channel_config_set_dreq(&c, pio_get_dreq(vidPIO, sm_pixels_read, false));
+    channel_config_set_chain_to(&c, dma_chan_write_reset);
     channel_config_set_enable(&c, true);
     dma_channel_configure(
-        dma_chan_capture,                           // Channel to be configured
+        dma_chan_write_capture,                           // Channel to be configured
         &c,                                 // The configuration we just created
         IMAGE_DATA,                         // The initial write address
-        &vidPIO->rxf[sm_pixels_read],            // The initial read address
+        //&vidPIO->rxf[sm_pixels_read],            // The initial read address
+        &vidPIO->rxf[sm_pixels],            // The initial read address
         IMAGE_SIZE_PIXELS,                   // Number of transfers.
         false                               // Do not start immediately.
     );
 
 
-    dma_channel_config c2 = dma_channel_get_default_config(dma_chan_reset);
+    dma_channel_config c2 = dma_channel_get_default_config(dma_chan_write_reset);
     channel_config_set_transfer_data_size(&c2, DMA_SIZE_32);
     channel_config_set_read_increment(&c2, false); // We will pull from the RX FIFO, so don't move read ptr
     channel_config_set_write_increment(&c2, false);
-    channel_config_set_chain_to(&c2, dma_chan_capture);
+    channel_config_set_chain_to(&c2, dma_chan_write_capture);
     channel_config_set_enable(&c2, true);
     dma_channel_configure(
-        dma_chan_reset,                                 // Channel to be configured
+        dma_chan_write_reset,                                 // Channel to be configured
         &c2,                                             // The configuration we just created
-        &(dma_hw->ch[dma_chan_capture].write_addr),     // The initial write address
+        &(dma_hw->ch[dma_chan_write_capture].write_addr),     // The initial write address
         &IMAGE_DATA_ADDRESS,                            // The initial read address
         1,                                              // Number of transfers.
         false                                           // Do not start immediately.
     );
 
     
-    dma_channel_start(dma_chan_capture);
-*/
-}
+    dma_channel_start(dma_chan_write_capture);
 
+}
+#endif
 
 /*
 // FLASH stuff lifted from pico examples
@@ -1139,12 +1534,16 @@ void dma_stop()
     dma_channel_abort(dma_chan_write_capture);
     dma_channel_abort(dma_chan_lookup_reset);
     dma_channel_abort(dma_chan_write_reset);
-
 }
 
 void pio_start()
 {
+#ifdef CONSOLE_MD
+    pio_sm_set_enabled(vidPIO, sm_rgbmux_switcher, true);
+#endif
+#ifdef CONSOLE_SMS
     pio_sm_set_enabled(vidPIO, sm_pixels_read, true);
+#endif
     pio_sm_set_enabled(vidPIO, sm_pixels, true);
     pio_sm_set_enabled(vidPIO, sm_sync, true);
 }
@@ -1166,13 +1565,28 @@ void pio_stop()
 	pio_interrupt_clear(vidPIO, 6);	
 	pio_interrupt_clear(vidPIO, 7);
 
-    
+#ifdef CONSOLE_MD
+	pio_sm_clear_fifos(vidPIO, sm_rgbmux_switcher);
+#endif 
+#ifdef CONSOLE_SMS
 	pio_sm_clear_fifos(vidPIO, sm_pixels_read);
+#endif
 	pio_sm_clear_fifos(vidPIO, sm_pixels);
 	pio_sm_clear_fifos(vidPIO, sm_sync);
 
+/*
+#ifdef CONSOLE_SMS
 	pio_remove_program(vidPIO, &pio_6bpp_color_read_pixel_program, offset_pixels_read);
 	pio_remove_program(vidPIO, &pio_6bpp_color_read_program, offset_pixels);
+#endif
+*/
+
+#ifdef CONSOLE_MD
+    pio_remove_program(vidPIO, &pio_rgbmux_switcher_program, offset_pixels);
+	//pio_remove_program(vidPIO, &pio_8bit_color_read_pixel_program, offset_pixels_read);
+	pio_remove_program(vidPIO, &pio_8bit_color_read_program, offset_pixels);
+#endif
+
 	pio_remove_program(vidPIO, &vsync_detector_program, offset_sync);
 
 }
@@ -1203,7 +1617,7 @@ void toggle_ntsc_pal_mode()
     dma_stop();
 
     config_pio();
-    config_dma();
+    config_dma_lookup();
 
     dma_start();
     pio_start();
@@ -1236,10 +1650,10 @@ int main()
 	//stdio_init_all();
     stdio_usb_init();
     
-	sleep_ms(500);
-	printf("------------\n");
-	printf("RGBlast SMS\n");
-	printf("------------\n");
+	sleep_ms(1500);
+	printf("---------------\n");
+	printf("RGBlast Genesis\n");
+	printf("---------------\n");
 	sleep_ms(10);
 
     load_config();
@@ -1254,6 +1668,12 @@ int main()
 
     gpio_init(NTSC_PAL_PIN);
     gpio_set_dir(NTSC_PAL_PIN, GPIO_OUT);
+
+    
+    //gpio_init(ADC_CLK_PIN);
+    //gpio_set_dir(ADC_CLK_PIN, GPIO_OUT);
+    //gpio_put(ADC_CLK_PIN, 1);
+
 
     current_ntsc = current_config.ntsc_pal_toggle;
     
@@ -1274,6 +1694,14 @@ int main()
     gpio_set_pulls(PAUSE_PIN, true, false);
     gpio_set_dir(PAUSE_PIN, GPIO_IN);
 
+
+    for(uint p = 0; p < 9; p++)
+    {
+        //gpio_disable_pulls(p);
+        gpio_set_pulls(p, false, true);
+    }
+
+
 /*
     gpio_init(USER_BTN_PIN);
     gpio_set_dir(USER_BTN_PIN, GPIO_IN);
@@ -1284,7 +1712,14 @@ int main()
 
     generate_lut();
 
+#ifdef CONSOLE_SMS
     fill_framebuffer_with_test_pattern();
+#endif
+#ifdef CONSOLE_MD
+    //fill_framebuffer_with_test_pattern_12bit();
+    fill_framebuffer_with_test_pattern_15bit();
+    //fill_framebuffer_with_test_pattern_16bit();
+#endif
 
 	sleep_ms(10);
 
@@ -1293,7 +1728,13 @@ int main()
     config_pio();
 
     claim_dma();
-    config_dma();
+    
+#ifdef CONSOLE_SMS
+    config_dma_lookup();
+#endif
+#ifdef CONSOLE_MD
+    config_dma_value();
+#endif
 
 	sleep_ms(10);
 
