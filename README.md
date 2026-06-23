@@ -1,7 +1,7 @@
 # RGBlast - RGB + Audio To HDMI For Sega Master System & Genesis/Mega Drive
 
-- Master System : [sms](/tree/sms) - Work in progress! 
-- Genesis/Mega Drive : [md](/tree/md)  - Work in progress! 
+- Master System : [sms](../sms) - Work in progress! 
+- Genesis/Mega Drive : [md](../md)  - Work in progress! 
 
 ## Description
 
