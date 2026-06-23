@@ -1,10 +1,13 @@
-# RGBlast SMS - RGB + Audio To HDMI For Sega Master System
+# RGBlast - RGB + Audio To HDMI For Sega Master System & Genesis/Mega Drive
 
-Work in progress! 
+- Master System : (See "sms" branch) - Work in progress! 
+- Genesis/Mega Drive : (See "md" branch)  - Work in progress! 
 
 ## Description
 
 The original RGBlast project was a 2-bit flash analog-to-digital converter RP2040-based video capture for the Sega Mega-Drive/Genesis... which is ideal for capturing the RGB222 video signals from the Sega Master System!
+
+This prototype has been updated so that instead of using 9 comparators (3 per RGB channel), the channels are multiplexed and switched mid-pixel for sampling so only 3 comparators are used with 3 SPDT analog switches.
 
 ## Features
 
