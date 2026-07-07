@@ -32,7 +32,7 @@
 
 #define sms_pixel_width 256 //256 //256
 #define sms_pixel_height 192 //190 //192
-//#define sms_pixel_x_offset 0 
+//#define sms_pixel_x_offset 370 
 #define sms_pixel_x_offset_dvi 37 
 
 

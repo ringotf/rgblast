@@ -89,13 +89,15 @@ void process_logs(void) {
 
 PIO vidPIO = pio0;
 uint sm_sync = 0;
-uint sm_pixels = 1;
-uint sm_pixels_read = 2;
+uint sm_read = 1;
+//uint sm_read_line = 2;
+uint sm_read_pixel = 2; //3;
 
 
-uint offset_sync;
-uint offset_pixels;
-uint offset_pixels_read;
+uint offset_sync_program;
+uint offset_read_program;
+//uint offset_read_line_program;
+uint offset_read_pixel_program;
 
 //uint32_t IMAGE_DATA[IMAGE_SIZE_WORDS+1];
 unsigned char IMAGE_DATA[IMAGE_SIZE_WORDS];
@@ -137,14 +139,21 @@ const uint RED_NOT_ENABLE_PIN = 20;
 const uint GREEN_NOT_ENABLE_PIN = 21;
 const uint BLUE_NOT_ENABLE_PIN = 22;
 */
+const uint ADC_PIN_COUNT = 3;
 
 const uint NTSC_PAL_PIN = 28;
 const uint PAUSE_PIN = 29;
+
+
+
+const uint SWITCH_DRAIN_PIN = 4;
 
 const uint SWITCH_R_PIN = 9;
 const uint SWITCH_GB_PIN = 10;
 const uint SWITCH_G_PIN = 10;
 const uint SWITCH_B_PIN = 11;
+
+
 
 
 const uint USER_BTN_PIN = 24;
@@ -655,6 +664,7 @@ static inline void vsync_detector_program_init(PIO pio, uint sm, uint offset, ui
 
 
     pio_gpio_init(pio, syncInPin);
+    
 
     pio_sm_config c = vsync_detector_program_get_default_config(offset);
     //sm_config_set_set_pins(&c, outPin, 1);
@@ -689,6 +699,10 @@ static inline void pio_6bpp_color_read_program_init(PIO pio, uint sm, uint offse
 
     //sm_config_set_clkdiv(&c, 1);
     //sm_config_set_clkdiv(&c, (DVI_TIMING.bit_clk_khz / sms_clock_pal_khz));
+    
+    pio_gpio_init(pio, SWITCH_DRAIN_PIN);
+    pio_sm_set_consecutive_pindirs(pio, sm, SWITCH_DRAIN_PIN, 1, true);
+    sm_config_set_set_pins(&c, SWITCH_DRAIN_PIN, 1);
 
     //float clockdiv = (float)(DVI_TIMING.bit_clk_khz / sms_clock_pal_khz) / 2.f;
     float clockdiv = (float)(DVI_TIMING.bit_clk_khz / sms_clock_khz) / 2.f;
@@ -697,14 +711,28 @@ static inline void pio_6bpp_color_read_program_init(PIO pio, uint sm, uint offse
 
     // Initialize and enable the state machine.
     pio_sm_init(pio, sm, offset, &c);
+
+    pio_sm_set_set_pins(pio, sm, SWITCH_DRAIN_PIN, 1);
 }
 
-static inline void pio_6bpp_color_read_pixel_program_init(PIO pio, uint sm, uint offset, uint startPin) {
+/*
+static inline void pio_6bpp_color_read_line_program_init(PIO pio, uint sm, uint offset) {
+    pio_sm_config c = pio_6bpp_color_read_line_program_get_default_config(offset);
+
+    sm_config_set_clkdiv(&c, 1);
+
+    // Initialize and enable the state machine.
+    pio_sm_init(pio, sm, offset, &c);
+
+}
+*/
+
+static inline void pio_6bpp_color_read_pixel_program_init(PIO pio, uint sm, uint offset, uint startPin, uint countPins) {
     
     
     pio_sm_config c = pio_6bpp_color_read_pixel_program_get_default_config(offset);
     sm_config_set_in_pins(&c, startPin);
-    pio_sm_set_consecutive_pindirs(pio, sm, startPin, 9, false);
+    pio_sm_set_consecutive_pindirs(pio, sm, startPin, countPins, false);
 
     sm_config_set_in_shift(&c, false, true, 32);
     //sm_config_set_in_shift(&c, false, true, 6);
@@ -716,11 +744,17 @@ static inline void pio_6bpp_color_read_pixel_program_init(PIO pio, uint sm, uint
     pio_gpio_init(pio, SWITCH_B_PIN);
     //pio_gpio_init(pio, SWITCH_GB_PIN);
 
+
     pio_sm_set_consecutive_pindirs(pio, sm, SWITCH_R_PIN, 3, true);
     sm_config_set_sideset_pins(&c, SWITCH_R_PIN);
+    
+    //pio_gpio_init(pio, SWITCH_DRAIN_PIN);
+    //pio_sm_set_consecutive_pindirs(pio, sm, SWITCH_DRAIN_PIN, 1, true);
+    //sm_config_set_set_pins(&c, SWITCH_DRAIN_PIN, 1);
 
     //sm_config_set_clkdiv(&c, (DVI_TIMING.bit_clk_khz / sms_clock_pal_khz));
     sm_config_set_clkdiv(&c, 1.0f);
+
     
     //float clockdiv = (float)(DVI_TIMING.bit_clk_khz / sms_clock_pal_khz) / 2.f;
     //printf("Read Pixel ClockDiv: %f\n", clockdiv);
@@ -728,30 +762,37 @@ static inline void pio_6bpp_color_read_pixel_program_init(PIO pio, uint sm, uint
 
     // Initialize and enable the state machine.
     pio_sm_init(pio, sm, offset, &c);
+    
+    //pio_sm_set_set_pins(pio, sm, SWITCH_DRAIN_PIN, 1);
+
 }
 
 
 void claim_pio_sm()
 {
 	pio_sm_claim(vidPIO, sm_sync);
-    pio_sm_claim(vidPIO, sm_pixels);
-    pio_sm_claim(vidPIO, sm_pixels_read);
+    pio_sm_claim(vidPIO, sm_read);
+    //pio_sm_claim(vidPIO, sm_read_line);
+    pio_sm_claim(vidPIO, sm_read_pixel);
 }
 
 void config_pio()
 {
 
-    offset_sync = pio_add_program(vidPIO, &vsync_detector_program);
+    offset_sync_program = pio_add_program(vidPIO, &vsync_detector_program);
     //uint sm_sync = pio_claim_unused_sm(vidPIO, true);
     
 
     gpio_set_input_enabled(SYNC_IN_PIN, true);
 
     // PIO pixelReadPIO = pio1;
-    offset_pixels = pio_add_program(vidPIO, &pio_6bpp_color_read_program);
+    offset_read_program = pio_add_program(vidPIO, &pio_6bpp_color_read_program);
     
 
-    offset_pixels_read = pio_add_program(vidPIO, &pio_6bpp_color_read_pixel_program);
+    //offset_read_line_program = pio_add_program(vidPIO, &pio_6bpp_color_read_line_program);
+
+    
+    offset_read_pixel_program = pio_add_program(vidPIO, &pio_6bpp_color_read_pixel_program);
     
 
     /*for (uint i=0; i<6; i++) {
@@ -765,17 +806,23 @@ void config_pio()
     pio_sm_exec_wait_blocking(vidPIO, sm_sync, pio_encode_pull(false, true));
     pio_sm_exec_wait_blocking(vidPIO, sm_sync, pio_encode_mov(pio_y, pio_osr));
 
+
     // force 320 pixels wide into hsync
-    //pio_sm_put_blocking(vidPIO, sm_pixels, 63);
-    pio_sm_put_blocking(vidPIO, sm_pixels, pixels_in_scanline-1);
-    pio_sm_exec_wait_blocking(vidPIO, sm_pixels, pio_encode_pull(false, true));
-    pio_sm_exec_wait_blocking(vidPIO, sm_pixels, pio_encode_mov(pio_y, pio_osr));
+    //pio_sm_put_blocking(vidPIO, sm_read, 63);
+    pio_sm_put_blocking(vidPIO, sm_read, pixels_in_scanline-1);
+    pio_sm_exec_wait_blocking(vidPIO, sm_read, pio_encode_pull(false, true));
+    pio_sm_exec_wait_blocking(vidPIO, sm_read, pio_encode_mov(pio_y, pio_osr));
+
+
+    //pio_sm_put_blocking(vidPIO, sm_read_line, pixels_in_scanline-1);
+    //pio_sm_exec_wait_blocking(vidPIO, sm_read_line, pio_encode_pull(false, true));
+    //pio_sm_exec_wait_blocking(vidPIO, sm_read_line, pio_encode_mov(pio_y, pio_osr));
 
 
     uint32_t lut_address = ((uint32_t)SIX_BIT_LUT) >> 9;
-    pio_sm_put_blocking(vidPIO, sm_pixels_read, lut_address);
-    pio_sm_exec_wait_blocking(vidPIO, sm_pixels_read, pio_encode_pull(false, true));
-    pio_sm_exec_wait_blocking(vidPIO, sm_pixels_read, pio_encode_mov(pio_y, pio_osr));
+    pio_sm_put_blocking(vidPIO, sm_read_pixel, lut_address);
+    pio_sm_exec_wait_blocking(vidPIO, sm_read_pixel, pio_encode_pull(false, true));
+    pio_sm_exec_wait_blocking(vidPIO, sm_read_pixel, pio_encode_mov(pio_y, pio_osr));
 
 
     //pio_6bpp_color_read_pixel_program_init(vidPIO, sm_pixels_read, offset_pixels_read, RGB_IN_START_PIN);
@@ -797,10 +844,11 @@ void config_pio()
 	
 
 
-    pio_6bpp_color_read_pixel_program_init(vidPIO, sm_pixels_read, offset_pixels_read, RED_ADC_IN_PIN);
-    pio_6bpp_color_read_program_init(vidPIO, sm_pixels, offset_pixels, RED_ADC_IN_PIN);
+    pio_6bpp_color_read_pixel_program_init(vidPIO, sm_read_pixel, offset_read_pixel_program, RED_ADC_IN_PIN, ADC_PIN_COUNT);
+    //pio_6bpp_color_read_line_program_init(vidPIO, sm_read_line, offset_read_line_program);
+    pio_6bpp_color_read_program_init(vidPIO, sm_read, offset_read_program, RED_ADC_IN_PIN);
 
-    vsync_detector_program_init(vidPIO, sm_sync, offset_sync, SYNC_IN_PIN);
+    vsync_detector_program_init(vidPIO, sm_sync, offset_sync_program, SYNC_IN_PIN);
 
 
     //PIO adcPIO = pio1;
@@ -865,14 +913,14 @@ void config_dma()
     channel_config_set_transfer_data_size(&lookup_config, DMA_SIZE_32);
     channel_config_set_read_increment(&lookup_config, false); // We will pull from the RX FIFO, so don't move read ptr
     channel_config_set_write_increment(&lookup_config, false);
-    channel_config_set_dreq(&lookup_config, pio_get_dreq(vidPIO, sm_pixels_read, false));
+    channel_config_set_dreq(&lookup_config, pio_get_dreq(vidPIO, sm_read_pixel, false));
     channel_config_set_chain_to(&lookup_config, dma_chan_lookup_reset);
     channel_config_set_enable(&lookup_config, true);
     dma_channel_configure(
         dma_chan_lookup_capture,                                        // Channel to be configured
         &lookup_config,                                                 // The configuration we just created
         write_chan_write_address_pointer,                               // The initial write address
-        &vidPIO->rxf[sm_pixels_read],                                        // The initial read address
+        &vidPIO->rxf[sm_read_pixel],                                        // The initial read address
         IMAGE_SIZE_PIXELS,                                              // Number of transfers.
         false                                                           // Do not start immediately.
     );
@@ -1144,8 +1192,9 @@ void dma_stop()
 
 void pio_start()
 {
-    pio_sm_set_enabled(vidPIO, sm_pixels_read, true);
-    pio_sm_set_enabled(vidPIO, sm_pixels, true);
+    pio_sm_set_enabled(vidPIO, sm_read_pixel, true);
+    //pio_sm_set_enabled(vidPIO, sm_read_line, true);
+    pio_sm_set_enabled(vidPIO, sm_read, true);
     pio_sm_set_enabled(vidPIO, sm_sync, true);
 }
 
@@ -1167,13 +1216,15 @@ void pio_stop()
 	pio_interrupt_clear(vidPIO, 7);
 
     
-	pio_sm_clear_fifos(vidPIO, sm_pixels_read);
-	pio_sm_clear_fifos(vidPIO, sm_pixels);
+	pio_sm_clear_fifos(vidPIO, sm_read_pixel);
+	//pio_sm_clear_fifos(vidPIO, sm_read_line);
+	pio_sm_clear_fifos(vidPIO, sm_read);
 	pio_sm_clear_fifos(vidPIO, sm_sync);
 
-	pio_remove_program(vidPIO, &pio_6bpp_color_read_pixel_program, offset_pixels_read);
-	pio_remove_program(vidPIO, &pio_6bpp_color_read_program, offset_pixels);
-	pio_remove_program(vidPIO, &vsync_detector_program, offset_sync);
+	pio_remove_program(vidPIO, &pio_6bpp_color_read_pixel_program, offset_read_pixel_program);
+	//pio_remove_program(vidPIO, &pio_6bpp_color_read_line_program, offset_read_line_program);
+	pio_remove_program(vidPIO, &pio_6bpp_color_read_program, offset_read_program);
+	pio_remove_program(vidPIO, &vsync_detector_program, offset_sync_program);
 
 }
 
@@ -1246,11 +1297,13 @@ int main()
 
 	sleep_ms(10);
 
-
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN, GPIO_OUT);
     gpio_put(LED_PIN, 1);
-
+    
+    gpio_init(SWITCH_DRAIN_PIN);
+    gpio_set_dir(SWITCH_DRAIN_PIN, GPIO_OUT);
+    gpio_put(SWITCH_DRAIN_PIN, 0);
 
     gpio_init(NTSC_PAL_PIN);
     gpio_set_dir(NTSC_PAL_PIN, GPIO_OUT);
@@ -1269,16 +1322,35 @@ int main()
         gpio_put(NTSC_PAL_PIN, VDP_PAL_MODE);
     }
 
-
     gpio_init(PAUSE_PIN);
     gpio_set_pulls(PAUSE_PIN, true, false);
     gpio_set_dir(PAUSE_PIN, GPIO_IN);
+
+/*    
+    gpio_init(RED_ADC_IN_PIN);
+    gpio_set_pulls(RED_ADC_IN_PIN, false, true);
+    gpio_set_dir(RED_ADC_IN_PIN, GPIO_IN);
+
+    gpio_init(RED_ADC_IN_PIN+1);
+    gpio_set_pulls(RED_ADC_IN_PIN+1, false, true);
+    gpio_set_dir(RED_ADC_IN_PIN+1, GPIO_IN);
+
+    gpio_init(RED_ADC_IN_PIN+2);
+    gpio_set_pulls(RED_ADC_IN_PIN+2, false, true);
+    gpio_set_dir(RED_ADC_IN_PIN+2, GPIO_IN);
+*/
 
 /*
     gpio_init(USER_BTN_PIN);
     gpio_set_dir(USER_BTN_PIN, GPIO_IN);
     gpio_set_pulls(USER_BTN_PIN, true, false);
 */
+
+    gpio_init(SYNC_IN_PIN);
+    gpio_set_pulls(SYNC_IN_PIN, false, true);
+    gpio_set_dir(SYNC_IN_PIN, GPIO_IN);
+    gpio_set_input_hysteresis_enabled(SYNC_IN_PIN, false);
+
 
 	sleep_ms(10);
 
@@ -1300,6 +1372,8 @@ int main()
     dma_start();
     pio_start();
 
+    
+
     //pio_sm_set_enabled(adcPIO, sm_flashadc_red, true);
 
     //core1_main();
@@ -1317,6 +1391,7 @@ int main()
     //multicore_launch_core1_with_stack(core1_main, (uint32_t*)&core1_stack[CORE1_STACK_SIZE_BYTES / 4 - 1], CORE1_STACK_SIZE_BYTES);
 
 	multicore_launch_core1(core1_main); //libdvi core
+
 
     frameReady = false;
 
@@ -1343,7 +1418,10 @@ int main()
         //busy_wait_at_least_cycles(133);
         //busy_wait_at_least_cycles(300);
         //printf("test\n");
-
+        
+        //gpio_put(SWITCH_DRAIN_PIN, !gpio_get(SWITCH_DRAIN_PIN));
+        //bool csync = !gpio_get(SYNC_IN_PIN);
+        //gpio_put(SWITCH_DRAIN_PIN, csync);
 
         //time_now = time_us_32();
 
